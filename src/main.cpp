@@ -1,18 +1,16 @@
 #include <Arduino.h>
 #include <ETH.h>
-//#include <WebServer.h> 
 #include <PubSubClient.h>
 #include <ElegantOTA.h> // ip/update
 #include <EspAdsLib.h>
 #include <Arduino_JSON.h>
 #include <LittleFS.h>
-
 #include <ESPAsyncWebServer.h>
-
+#include <Adafruit_NeoPixel.h>
 
 #include "config.html"
 #include "index.html"
-
+#include "ParInSerOutShiftReg.h"
 
 #define ETH_ADDR        1
 #define ETH_POWER_PIN   16//-1 //16 // Do not use it, it can cause conflict during the software reset.
@@ -20,6 +18,8 @@
 #define ETH_MDC_PIN    23
 #define ETH_MDIO_PIN   18
 #define ETH_TYPE       ETH_PHY_LAN8720
+
+#define FORMAT_LITTLEFS_IF_FAILED      true
 
 void ReadButtons(void);
 void UpdateLeds(void);
@@ -30,15 +30,13 @@ AsyncEventSource events("/events");
 uint16_t cnt = 23;
 
 // MQTT
-const char* mqtt_server = "mosquitto.fritz.box";
 WiFiClient    ethClient;
 PubSubClient  mqtt(ethClient);
 
 // ADS
-ADS::AmsAddr SrcAmsAddr((char*)"192.168.0.203.1.1", 43609);
-ADS::AmsAddr DestAmsAddr((char*)"5.16.3.178.1.1", AMSPORT_R0_PLC_TC3);
-char DestIpAddr[] = "192.168.0.3"; // IP of the TwinCAT target machine
-ADS::Ads Ads(&SrcAmsAddr, &DestAmsAddr, DestIpAddr);
+ADS::AmsAddr SrcAmsAddr((char*)"1.1.1.1.1.1", 43609);
+ADS::AmsAddr DestAmsAddr((char*)"1.1.1.1.1.1", AMSPORT_R0_PLC_TC3);
+ADS::Ads Ads;
 
 // Inputs/Outputs
 #define EXT_LED_PIN 2
@@ -49,11 +47,13 @@ ADS::Ads Ads(&SrcAmsAddr, &DestAmsAddr, DestIpAddr);
 String sSettings;
 JSONVar SettingsJson;
 const static char* settingsfile    = "/settings";
-#define DEFAULT_SETTINGS "{\"server\": \"192.168.0.82\", \"port\": \"1883\", \"user\": \"\", \"pass\": \"\", \"topic\": \"LS111/Metering\", \"key\": \"ElectricalPower\", \"power\" : \"2000\", \"time\": \"300\"}"
+#define DEFAULT_SETTINGS "{\"server\": \"192.168.0.82\", \"port\": \"1883\", \"user\": \"\", \"pass\": \"\", \"topic\": \"trash\", \"PlcIp\" : \"192.168.0.3\", \"PlcAmsAddr\" : \"5.16.3.178.1.1\", \"PlcLedVar\": \"Main.u16LED\", \"PlcButtonVar\": \"Main.u16Button\" }"
 String load_from_file(const char* file_name, String defaultvalue) ;
 File         this_file;
 
-
+#define NEO_PIXEL_PIN 36
+#define NEO_PIXEL_COUNT 1
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_RGB + NEO_KHZ800);
 
 String load_from_file(const char* file_name, String defaultvalue) 
 {
@@ -72,30 +72,31 @@ String load_from_file(const char* file_name, String defaultvalue)
     return result;
 }
 
+bool write_to_file(const char* file_name, String contents) {
+    File this_file = LittleFS.open(file_name, "w");
+    if (!this_file) { // failed to open the file, return false
+        return false;
+    }
 
+    int bytesWritten = this_file.print(contents);
 
+    if (bytesWritten == 0) { // write failed
+        return false;
+    }
 
-/*
-void ConfigPage(void)
-{
-    String sJsonTxData =  "<script> var CurrentValues = '" + String(sSettings) + "'; </script>";
-    Serial.print("Current settings: ");
-    Serial.println(sSettings);
-    server.send(200, "text/html", sJsonTxData+ String(sConfigPage));
-}
-*/
-
-String processor(const String& var)
-{
-  //Serial.println(var);
-  if(var == "SW1")
-    return String(cnt);
-  else
-    return String("foo");
+    this_file.close();
+    return true;
 }
 
 void setup()
 {
+
+  String PlcIp;
+  String ScrNetId;
+  String DestNetId;
+  String IP;
+
+
   // Inputs and Outputs
   pinMode(ETH_POWER_PIN_ALTERNATIVE, OUTPUT);
   digitalWrite(ETH_POWER_PIN_ALTERNATIVE, HIGH);
@@ -106,6 +107,9 @@ void setup()
   Serial.begin(115200);
   delay(2500);
   Serial.println("hello");
+
+  // Little FS
+  LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
 
   // Load settings from filesystem
   sSettings = load_from_file(settingsfile,  DEFAULT_SETTINGS);
@@ -120,21 +124,47 @@ void setup()
 
   while(!((uint32_t)ETH.localIP())){}; // Waiting for IP (leave this line group to get IP via DHCP)
 
+  IP = ETH.localIP().toString();
+  Serial.println("IP: " + IP);
+
   // Config Webserver
-
  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", sIndexPage, processor);
+    request->send_P(200, "text/html", sIndexPage);
   });
 
-  // Handle Web Server Events
-  events.onConnect([](AsyncEventSourceClient *client){
-    if(client->lastId()){
-      Serial.printf("Client reconnected! Last message ID that it got is: %u\n", client->lastId());
-    }
-    // send event with message "hello!", id current millis
-    // and set reconnect delay to 1 second
-    client->send("hello!", NULL, millis(), 10000);
+  server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    String sJsonTxData =  "<!DOCTYPE html>\r\n<html>\r\n<script> var CurrentValues = '" + String(sSettings) + "'; </script>";
+    Serial.print("Current settings: ");
+    Serial.println(sSettings);
+    //server.send(200, "text/html", sJsonTxData+ String(sConfigPage));
+    sJsonTxData = sJsonTxData + String(sConfigPage);
+    request->send_P(200, "text/html", sJsonTxData.c_str());
   });
+
+  // Save new config to file
+  server.on("/save_new_config_data", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    int paramsNr = request->params();
+    JSONVar doc;
+
+    for(int i=0;i<paramsNr;i++)
+    {
+      AsyncWebParameter* p = request->getParam(i);
+  
+      doc[p->name()] = p->value();
+    }
+
+    String jsonString = JSON.stringify(doc);
+    Serial.println(jsonString);
+
+    write_to_file(settingsfile, jsonString);
+
+    request->send_P(200, "text/html", "Data saved. Restarting device .... <br><button onclick=\"window.location.href='/';\">Back</button>");
+    delay(1000);
+    ESP.restart();
+  });
+
 
   server.addHandler(&events);
 
@@ -144,19 +174,73 @@ void setup()
   server.begin(); // Start server
   Serial.println("Web server started");
 
+
+
   // Config ADS
+  PlcIp = SettingsJson["PlcIp"];
+  DestNetId = SettingsJson["PlcAmsAddr"];
+  DestAmsAddr.Change((char*)DestNetId.c_str(), AMSPORT_R0_PLC_TC3);
+
+  IP = IP + ".1.1";
+  SrcAmsAddr.Change((char*)IP.c_str(), 43609);
+  
+  Ads.SetAddr(&SrcAmsAddr, &DestAmsAddr, (char*)PlcIp.c_str());
   Ads.Connect();
 
-  // Config MQTT
-  mqtt.setServer(mqtt_server, 1883);
-  mqtt.connect("ESP32 ETH01");
+  strip.begin();
+  strip.setBrightness(50);             // set the maximum LED intensity down to 50
+  strip.show();
+  strip.setPixelColor(0, 255, 0, 0);
+  strip.show();
+}
+
+
+// -------------------------------------------------------
+// Check the Mqtt status and reconnect if necessary
+// -------------------------------------------------------
+long PreviousConnectTryMillis = 0;
+bool MqttReconnect()
+{
+    if (SettingsJson["server"].length() == 0)
+    {
+        //No server configured
+        return false;
+    }
+
+    if (mqtt.connected())
+        return true;
+
+    if (millis() - PreviousConnectTryMillis >= (5000))
+    {
+        Serial.println("Attempting MQTT connection...");
+
+        mqtt.setServer(SettingsJson["server"], atoi(SettingsJson["port"]));
+
+        // Attempt to connect
+        if( mqtt.connect("ESP32 ETH01", (const char*)SettingsJson["user"], (const char*)SettingsJson["pass"]) )
+        {
+            Serial.println("  Mqtt connected");            
+            return true;
+        }
+        else
+        {
+          
+            Serial.print("  Mqtt connect failed, rc=");
+            Serial.print(mqtt.state());
+            Serial.println(" try again in 5 seconds");
+        }
+
+        PreviousConnectTryMillis = millis(); //Run only once every 5 seconds
+    }
+    return false;
 }
 
 long lastMsg = 0;
 char text[128];
 
 uint16_t u16Led;
-uint16_t u16LedOld;
+uint16_t u16LedOld = 0xFFFF;
+std::string VarName;
 
 void loop()
 {
@@ -165,17 +249,14 @@ void loop()
 
   ReadButtons();
   UpdateLeds();
+  MqttReconnect();
 
   if (now - lastMsg > 1000) 
   {
-    cnt++;
-    sprintf(text, "%i", cnt);
-    //mqtt.publish("trash/ETH01", text);
+    VarName = std::string(SettingsJson["PlcLedVar"]);
+    Ads.ReadPlcVarByName(VarName, &u16Led, sizeof(uint16_t));
+    Serial.println("Read Led from PLC: " + String(u16Led));
     lastMsg = now;
-    Serial.println(text);
-    Ads.ReadPlcVarByName((char*)"Main.u16LED", &u16Led, sizeof(uint16_t));
-   
-    //PIN_TOGGLE(EXT_LED_PIN);
   }
 }
 
@@ -185,6 +266,7 @@ bool bSwitchOld = true;
 void UpdateLeds(void)
 {
   JSONVar LedJson;
+  String topic;
 
   if( u16Led != u16LedOld ) // Leds have changed
   {
@@ -200,6 +282,15 @@ void UpdateLeds(void)
     LedJson["LED"][4] = 0;
     LedJson["LED"][5] = 0; 
 
+    Serial.println("LED has changed:");
+   
+    topic = SettingsJson["topic"];
+    topic.replace("\"", "");
+    topic = topic + "/GetLed";
+    Serial.println("  - Send to mqtt (Topic: " + topic + ")");
+    mqtt.publish(topic.c_str(), JSON.stringify(LedJson).c_str());
+
+    Serial.println("  - Send to website");
     events.send(JSON.stringify(LedJson).c_str(), "Leds",millis());
 
   }
@@ -213,6 +304,8 @@ void ReadButtons(void)
   uint16_t u16OutVal;
   JSONVar BtnJson;
   long now = millis();
+  String topic;
+  std::string VarName;
 
   bSwitch = !digitalRead(EXT_SWITCH_PIN); // switch pressed = low level = false
 
@@ -233,10 +326,22 @@ void ReadButtons(void)
       BtnJson["BTN"][3] = 0;
       BtnJson["BTN"][4] = 0;
       BtnJson["BTN"][5] = 0; 
- 
+
+      Serial.println("Button pressed:");
+      Serial.println("  - Send to website");
       events.send(JSON.stringify(BtnJson).c_str(), "Buttons",millis());
 
-      Ads.WritePlcVarByName("Main.u16Button", &u16OutVal, sizeof(uint16_t));
+      
+      topic = SettingsJson["topic"];
+      topic.replace("\"", "");
+      topic = topic + "/GetButton";
+      Serial.println("  - Send to mqtt (Topic: " + topic + ")");
+      mqtt.publish(topic.c_str(), JSON.stringify(BtnJson).c_str());
+
+
+      Serial.println("  - Send to PLC");
+      VarName = std::string(SettingsJson["PlcButtonVar"]);
+      Ads.WritePlcVarByName(VarName, &u16OutVal, sizeof(uint16_t));
     }
     bSwitchOld = bSwitch;
   }

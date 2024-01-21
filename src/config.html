@@ -1,12 +1,10 @@
 const char sConfigPage[] PROGMEM = R"=====(
-<!DOCTYPE html>
-<html>
-
 <body onload="OnLoad()">
 
   <h2>Eth Switch</h2>
 
   <form action="/save_new_config_data" method="get">  
+    <h3>MQTT Settings</h3>
     MQTT Server<br>
     <input id="server" name="server" type="text"><br><br>
 
@@ -22,14 +20,18 @@ const char sConfigPage[] PROGMEM = R"=====(
     MQTT Topic<br>
     <input id="topic" name="topic" type="text"><br><br>
 
-    MQTT Key<br>
-    <input id="key" name="key" type="text"><br><br>
+    <h3>PLC Settings</h3>
+    Taget Name/IP<br>
+    <input id="topic" name="PlcIp" type="text"><br><br>
 
-    Power needed by appliance [W]<br>
-    <input id="power" name="power" type="text"><br><br>
+    Taget NetId<br>
+    <input id="topic" name="PlcAmsAddr" type="text"><br><br>
 
-    Time to wait before start [s]<br>
-    <input id="time" name="time" type="text"><br><br>
+    PLC Led Var<br>
+    <input id="topic" name="PlcLedVar" type="text"><br><br>
+
+    PLC Led Button<br>
+    <input id="topic" name="PlcButtonVar" type="text"><br><br>
     
     <input type="submit" value="Save">
   </form>
