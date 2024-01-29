@@ -3,9 +3,10 @@ const char sConfigPage[] PROGMEM = R"=====(
 
   <h2>Eth Switch</h2>
 
-  <form action="/save_new_config_data" method="get">  
+  <form action="/save_new_config_data" method="get" value="Enabled">  
     <h3>MQTT Settings</h3>
-    MQTT Server<br>
+
+    MQTT Server (Leave blank to disable MQTT)<br>
     <input id="server" name="server" type="text"><br><br>
 
     MQTT Port<br>
@@ -20,18 +21,19 @@ const char sConfigPage[] PROGMEM = R"=====(
     MQTT Topic<br>
     <input id="topic" name="topic" type="text"><br><br>
 
-    <h3>PLC Settings</h3>
-    Taget Name/IP<br>
-    <input id="topic" name="PlcIp" type="text"><br><br>
+    <h3>TwinCAT ADS Settings</h3>
+    
+    Taget Name/IP (Leave blank to disable ADS)<br>
+    <input id="PlcIp" name="PlcIp" type="text"><br><br>
 
     Taget NetId<br>
-    <input id="topic" name="PlcAmsAddr" type="text"><br><br>
+    <input id="PlcAmsAddr" name="PlcAmsAddr" type="text"><br><br>
 
-    PLC Led Var<br>
-    <input id="topic" name="PlcLedVar" type="text"><br><br>
+    PLC LED Variable Name<br>
+    <input id="PlcLedVar" name="PlcLedVar" type="text"><br><br>
 
-    PLC Led Button<br>
-    <input id="topic" name="PlcButtonVar" type="text"><br><br>
+    PLC Led Button Varaible Name<br>
+    <input id="PlcButtonVar" name="PlcButtonVar" type="text"><br><br>
     
     <input type="submit" value="Save">
   </form>

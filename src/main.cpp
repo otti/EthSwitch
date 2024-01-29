@@ -27,8 +27,6 @@ void UpdateLeds(void);
 AsyncWebServer  server(80); // Declare the WebServer object
 AsyncEventSource events("/events");
 
-uint16_t cnt = 23;
-
 // MQTT
 WiFiClient    ethClient;
 PubSubClient  mqtt(ethClient);
@@ -51,9 +49,29 @@ const static char* settingsfile    = "/settings";
 String load_from_file(const char* file_name, String defaultvalue) ;
 File         this_file;
 
-#define NEO_PIXEL_PIN 36
-#define NEO_PIXEL_COUNT 1
+#define NEO_PIXEL_PIN 15
+#define NEO_PIXEL_COUNT 24
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_RGB + NEO_KHZ800);
+
+bool MqttIsEnabled(void)
+{
+  String s;
+  s = SettingsJson["server"];
+  if( s.length() > 3 )
+    return true;
+  else
+    return false;
+}
+
+bool AdsIsEnabled(void)
+{
+  String s;
+  s = SettingsJson["PlcIp"];
+  if( s.length() > 3 )
+    return true;
+  else
+    return false;
+}
 
 String load_from_file(const char* file_name, String defaultvalue) 
 {
@@ -105,15 +123,17 @@ void setup()
 
   // Serial
   Serial.begin(115200);
-  delay(2500);
+  delay(2500); // The serial monitor needs some time to start up after programming
   Serial.println("hello");
-
+  
   // Little FS
   LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
 
   // Load settings from filesystem
   sSettings = load_from_file(settingsfile,  DEFAULT_SETTINGS);
   SettingsJson = JSON.parse(sSettings);
+
+  Serial.println((const char*)SettingsJson["PlcIp"]);
 
   Serial.println("Current settings:");
   Serial.println(sSettings);
@@ -174,24 +194,35 @@ void setup()
   server.begin(); // Start server
   Serial.println("Web server started");
 
-
-
   // Config ADS
-  PlcIp = SettingsJson["PlcIp"];
-  DestNetId = SettingsJson["PlcAmsAddr"];
-  DestAmsAddr.Change((char*)DestNetId.c_str(), AMSPORT_R0_PLC_TC3);
+  if( AdsIsEnabled() )
+  {
+      Serial.println("ADS Enabled");
+      PlcIp = SettingsJson["PlcIp"];
+      DestNetId = SettingsJson["PlcAmsAddr"];
+      DestAmsAddr.Change((char*)DestNetId.c_str(), AMSPORT_R0_PLC_TC3);
 
-  IP = IP + ".1.1";
-  SrcAmsAddr.Change((char*)IP.c_str(), 43609);
-  
-  Ads.SetAddr(&SrcAmsAddr, &DestAmsAddr, (char*)PlcIp.c_str());
-  Ads.Connect();
+      IP = IP + ".1.1";
+      SrcAmsAddr.Change((char*)IP.c_str(), 43609);
+      
+      Ads.SetAddr(&SrcAmsAddr, &DestAmsAddr, (char*)PlcIp.c_str());
+      Ads.Connect();
+  }
+  else
+  {
+    Serial.println("ADS Disabled");
+  }
+
+  if( MqttIsEnabled() )
+    Serial.println("MQTT Enabled");
+  else
+    Serial.println("MQTT Disabled");
 
   strip.begin();
   strip.setBrightness(50);             // set the maximum LED intensity down to 50
-  strip.show();
-  strip.setPixelColor(0, 255, 0, 0);
-  strip.show();
+
+  
+  
 }
 
 
@@ -249,13 +280,18 @@ void loop()
 
   ReadButtons();
   UpdateLeds();
-  MqttReconnect();
+  if( MqttIsEnabled() )
+    MqttReconnect();
 
   if (now - lastMsg > 1000) 
   {
-    VarName = std::string(SettingsJson["PlcLedVar"]);
-    Ads.ReadPlcVarByName(VarName, &u16Led, sizeof(uint16_t));
-    Serial.println("Read Led from PLC: " + String(u16Led));
+    if( AdsIsEnabled() )
+    {
+      VarName = std::string(SettingsJson["PlcLedVar"]);
+      Ads.ReadPlcVarByName(VarName, &u16Led, sizeof(uint16_t));
+      Serial.println("Read Led from PLC: " + String(u16Led));
+    }
+
     lastMsg = now;
   }
 }
@@ -270,25 +306,36 @@ void UpdateLeds(void)
 
   if( u16Led != u16LedOld ) // Leds have changed
   {
-    if( u16Led )
+    if( u16Led&0x01 )
       digitalWrite(EXT_LED_PIN, 1);
     else
       digitalWrite(EXT_LED_PIN, 0);
 
-    LedJson["LED"][0] = u16Led != 0 ? 1 : 0; 
-    LedJson["LED"][1] = 0;
-    LedJson["LED"][2] = 0;
-    LedJson["LED"][3] = 0;
-    LedJson["LED"][4] = 0;
-    LedJson["LED"][5] = 0; 
+    for(int i=0; i<6; i++ )
+    {
+      if( u16Led&(0x01<<i) )
+      {
+        LedJson["LED"][i] = 1; 
+        strip.setPixelColor(i, 0, 50, 0);
+      }
+      else
+      {
+        LedJson["LED"][i] = 0; 
+        strip.setPixelColor(i, 0, 0, 0);
+      }
+    }
 
+    strip.show();
     Serial.println("LED has changed:");
    
-    topic = SettingsJson["topic"];
-    topic.replace("\"", "");
-    topic = topic + "/GetLed";
-    Serial.println("  - Send to mqtt (Topic: " + topic + ")");
-    mqtt.publish(topic.c_str(), JSON.stringify(LedJson).c_str());
+    if(MqttIsEnabled() )
+    {
+      topic = SettingsJson["topic"];
+      topic.replace("\"", "");
+      topic = topic + "/GetLed";
+      Serial.println("  - Send to mqtt (Topic: " + topic + ")");
+      mqtt.publish(topic.c_str(), JSON.stringify(LedJson).c_str());
+    }
 
     Serial.println("  - Send to website");
     events.send(JSON.stringify(LedJson).c_str(), "Leds",millis());
@@ -329,19 +376,23 @@ void ReadButtons(void)
 
       Serial.println("Button pressed:");
       Serial.println("  - Send to website");
-      events.send(JSON.stringify(BtnJson).c_str(), "Buttons",millis());
+      events.send(JSON.stringify(BtnJson).c_str(), "Buttons", millis());
 
-      
-      topic = SettingsJson["topic"];
-      topic.replace("\"", "");
-      topic = topic + "/GetButton";
-      Serial.println("  - Send to mqtt (Topic: " + topic + ")");
-      mqtt.publish(topic.c_str(), JSON.stringify(BtnJson).c_str());
+      if(MqttIsEnabled() )
+      {
+        topic = SettingsJson["topic"];
+        topic.replace("\"", "");
+        topic = topic + "/GetButton";
+        Serial.println("  - Send to mqtt (Topic: " + topic + ")");
+        mqtt.publish(topic.c_str(), JSON.stringify(BtnJson).c_str());
+      }
 
-
-      Serial.println("  - Send to PLC");
-      VarName = std::string(SettingsJson["PlcButtonVar"]);
-      Ads.WritePlcVarByName(VarName, &u16OutVal, sizeof(uint16_t));
+      if( AdsIsEnabled() )
+      {
+        Serial.println("  - Send to PLC");
+        VarName = std::string(SettingsJson["PlcButtonVar"]);
+        Ads.WritePlcVarByName(VarName, &u16OutVal, sizeof(uint16_t));
+      }
     }
     bSwitchOld = bSwitch;
   }
