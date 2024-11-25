@@ -1,62 +1,83 @@
 const char sConfigPage[] PROGMEM = R"=====(
-<body onload="OnLoad()">
-
-  <h2>Eth Switch</h2>
-
-  <form action="/save_new_config_data" method="get" value="Enabled">  
-    <h3>MQTT Settings</h3>
-
-    MQTT Server (Leave blank to disable MQTT)<br>
-    <input id="server" name="server" type="text"><br><br>
-
-    MQTT Port<br>
-    <input id="port" name="port" type="text"><br><br>
-
-    MQTT User<br>
-    <input id="user" name="user" type="text"><br><br>
-
-    MQTT Pass<br>
-    <input id="pass" name="pass" type="password"><br><br>
-
-    MQTT Topic<br>
-    <input id="topic" name="topic" type="text"><br><br>
-
-    <h3>TwinCAT ADS Settings</h3>
-    
-    Taget Name/IP (Leave blank to disable ADS)<br>
-    <input id="PlcIp" name="PlcIp" type="text"><br><br>
-
-    Taget NetId<br>
-    <input id="PlcAmsAddr" name="PlcAmsAddr" type="text"><br><br>
-
-    PLC LED Variable Name<br>
-    <input id="PlcLedVar" name="PlcLedVar" type="text"><br><br>
-
-    PLC Led Button Varaible Name<br>
-    <input id="PlcButtonVar" name="PlcButtonVar" type="text"><br><br>
-    
-    <input type="submit" value="Save">
-  </form>
-
-<script>
-
-  function OnLoad()
-  {
-    const obj = JSON.parse(CurrentValues);
-    
-    inputs = document.getElementsByTagName('input'); // Get no of input fields
-    len = inputs.length - 1; // The submit button is also an input --> - 1
-
-    var i = 0;
-    for( const x in obj)
+    <body onload="OnLoad()">
+  
+    <h2>Eth Switch</h2>
+  
+    <form action="/save_new_config_data" method="get" value="Enabled">
+      <h3>Device Settings</h3>
+  
+      Device Name<br>
+      <input id="DevName" name="DevName" type="text" onchange="UpdateTopics()"><br><br>
+  
+      <h3>MQTT Settings</h3>
+  
+      MQTT Server (Leave blank to disable MQTT)<br>
+      <input id="server" name="server" type="text"><br><br>
+  
+      MQTT Port<br>
+      <input id="port" name="port" type="text"><br><br>
+  
+      MQTT User<br>
+      <input id="user" name="user" type="text"><br><br>
+  
+      MQTT Pass<br>
+      <input id="pass" name="pass" type="password"><br><br>
+  
+      MQTT Topic<br>
+      <input id="topic" name="topic" type="text" onchange="UpdateTopics()"><br><br>
+      <p id="ButtonTopic">foo</p>
+      <p id="LedTopic">bar</p>
+  
+      <h3>TwinCAT ADS Settings</h3>
+      
+      Taget Name/IP (Leave blank to disable ADS)<br>
+      <input id="PlcIp" name="PlcIp" type="text"><br><br>
+  
+      Taget NetId<br>
+      <input id="PlcAmsAddr" name="PlcAmsAddr" type="text"><br><br>
+  
+      PLC LED Variable Name<br>
+      <input id="PlcLedVar" name="PlcLedVar" type="text"><br><br>
+  
+      PLC Led Button Varaible Name<br>
+      <input id="PlcButtonVar" name="PlcButtonVar" type="text"><br><br>
+      
+      <input type="submit" value="Save">
+    </form>
+  
+  <script>
+  
+    function OnLoad()
     {
-      inputs[i].value = obj[x];
-      i++;
+      const obj = JSON.parse(CurrentValues);
+      
+      inputs = document.getElementsByTagName('input'); // Get no of input fields
+      len = inputs.length - 1; // The submit button is also an input --> - 1
+  
+      var i = 0;
+      for( const x in obj)
+      {
+        inputs[i].value = obj[x];
+        i++;
+      }
+  
+      UpdateTopics();
     }
-  }
-
-  </script>
-
-</body>
-</html>
+    
+    function UpdateTopics()
+    {
+      BaseTopic = document.getElementById("topic").value;
+      DevName   = document.getElementById("DevName").value;
+  
+      var BtnTopic = "Button Topic: " + BaseTopic + "/" + DevName + "/Buttons" ;
+      var LedTopic = "Led Topic: " + BaseTopic + "/" + DevName + "/LEDS";
+  
+      document.getElementById("ButtonTopic").innerHTML = BtnTopic;
+      document.getElementById("LedTopic").innerHTML    = LedTopic;
+    }
+  
+    </script>
+  
+  </body>
+  </html>
 )=====";
