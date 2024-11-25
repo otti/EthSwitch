@@ -18,7 +18,8 @@
 #define TEMP_SENS_PIN 35
 #define NEO_PIXEL_PIN 5
 
-#define NO_OF_BUTTONS 6
+#define NO_OF_BUTTONS     6
+#define NO_OF_LEDS        1
 
 #define BTN1_PIN 4
 #define BTN2_PIN 32
@@ -42,7 +43,7 @@
 #define ETH_MDIO_PIN              18
 #define ETH_TYPE                  ETH_PHY_LAN8720
 
-#define NEO_PIXEL_COUNT           1
+
 
 #define FORMAT_LITTLEFS_IF_FAILED true
 
@@ -65,15 +66,28 @@ ADS::Ads Ads;
 // Website
 String  sSettings;
 JSONVar SettingsJson;
+JSONVar MqttLeds;
 const static char* settingsfile    = "/settings";
-#define DEFAULT_SETTINGS "{\"server\": \"192.168.0.82\", \"port\": \"1883\", \"user\": \"\", \"pass\": \"\", \"topic\": \"trash\", \"PlcIp\" : \"192.168.0.3\", \"PlcAmsAddr\" : \"5.16.3.178.1.1\", \"PlcLedVar\": \"Main.u16LED\", \"PlcButtonVar\": \"Main.u16Button\" }"
+#define DEFAULT_SETTINGS "{\"DevName\": \"EthSwitch\", \"server\": \"mosquitto.lan\", \"port\": \"1883\", \"user\": \"\", \"pass\": \"\", \"topic\": \"trash\", \"PlcIp\" : \"plc.lan\", \"PlcAmsAddr\" : \"5.16.3.178.1.1\", \"PlcLedVar\": \"Main.u16LED\", \"PlcButtonVar\": \"Main.u16Button\" }"
 String load_from_file(const char* file_name, String defaultvalue) ;
 File         this_file;
 bool bNewConnection = false;
 
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NEO_PIXEL_COUNT, NEO_PIXEL_PIN, NEO_RGB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NO_OF_LEDS, NEO_PIXEL_PIN, NEO_RGB + NEO_KHZ800);
 
-#define MQTT_AUTODISCOVERY_TOPIC "homeassistant"
+char MqttBtnTopic[128];
+char MqttLedTopic[128];
+
+typedef struct 
+{
+  uint8_t R;
+  uint8_t G;
+  uint8_t B;
+}sLed_t;
+
+
+sLed_t LEDS[NO_OF_LEDS];
+
 
 String MacToStr(const uint8_t* mac)
 {
@@ -84,7 +98,6 @@ String MacToStr(const uint8_t* mac)
   return result;
 }
 
-
 // Ethernet MAC: a0:b7:65:dc:c3:53
 String GetClientId()
 {
@@ -94,7 +107,6 @@ String GetClientId()
   ClientId += MacToStr(mac);
   return ClientId;
 }
-
 
 bool MqttIsEnabled(void)
 {
@@ -116,29 +128,14 @@ bool AdsIsEnabled(void)
     return false;
 }
 
-void send_mqtt_auto_discovery(void)
-{
-  char topic[128];
-  char msg[128];
-
-  if( MqttIsEnabled() )
-  {
-    for(int i=1; i<=NO_OF_BUTTONS; i++ )
-    {
-      sprintf(msg, "{\"name\": \"Eingang_CH%i\", \"state_topic\": \"%s/binary_sensor/Eingang_CH%i/state\"}", i, MQTT_AUTODISCOVERY_TOPIC, i );
-      sprintf(topic, "%s/binary_sensor/Eingang_CH%i/config", MQTT_AUTODISCOVERY_TOPIC, i);
-      mqtt.publish(topic, msg, true);
-    }
-  }
-}
-
 // u8BtnNo from 1 to NO_OF_BUTTONS
 void mqtt_send_btn_state(uint8_t u8BtnNo, bool state)
 {
   char topic[128];
   char msg[5];
   
-  sprintf(topic, "%s/binary_sensor/Eingang_CH%i/state", MQTT_AUTODISCOVERY_TOPIC, u8BtnNo);
+  sprintf(topic, "%s/%s/BTN_CH%i", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"], u8BtnNo);
+  Serial.println(topic);
 
   if( state )
     strcpy(msg, "ON");
@@ -201,53 +198,6 @@ float MCP9700_GetTemperature(uint16_t u16AdcRawValue)
   return tmp;
 }
 
-void fade(uint16_t u16Delay)
-{
-    int i;
-    for(i=0; i<255; i++ )
-    {
-      strip.setPixelColor(0, 0, i, 0);
-      strip.show();
-      delay(u16Delay);
-    }
-
-    for(i=255; i>=0; --i )
-    {
-      strip.setPixelColor(0, 0, i, 0);
-      strip.show();
-      delay(u16Delay);
-    }
-
-    for(i=0; i<255; i++ )
-    {
-      strip.setPixelColor(0, 0, 0, i);
-      strip.show();
-      delay(u16Delay);
-    }
-
-    for(i=255; i>=0; --i )
-    {
-      strip.setPixelColor(0, 0, 0, i);
-      strip.show();
-      delay(u16Delay);
-    }
-
-    for(i=0; i<255; i++ )
-    {
-      strip.setPixelColor(0, i, 0, 0);
-      strip.show();
-      delay(u16Delay);
-    }
-
-    for(i=255; i>=0; --i )
-    {
-      strip.setPixelColor(0, i, 0, 0);
-      strip.show();
-      delay(u16Delay);
-    }
-}
-
-
 void setup()
 {
   uint16_t u16TempRaw;
@@ -308,13 +258,17 @@ void setup()
   strip.begin();
   strip.setBrightness(50);             // set the maximum LED intensity down to 50
 
+  // Turn all LEDs off
+  memset(LEDS, 0, sizeof(LEDS));
+  UpdateLeds();
+
   for(int i=0; i<10; i++)
   {
     PIN_TOGGLE(EXT_LED_PIN);
     delay(150);
   }
 
-  fade(2);
+  //fade(2);
 
 
   // Ethernet
@@ -405,6 +359,10 @@ void setup()
   else
     Serial.println("MQTT Disabled");
 
+  
+  sprintf(MqttBtnTopic, "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
+  sprintf(MqttLedTopic, "%s/%s/LEDS",    (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
+
 }
 
 
@@ -434,8 +392,7 @@ bool MqttReconnect()
         if( mqtt.connect(GetClientId().c_str(), (const char*)SettingsJson["user"], (const char*)SettingsJson["pass"]) )
         {
             Serial.println("  Mqtt connected with ClientId " +  GetClientId());
-            
-            send_mqtt_auto_discovery();            
+            mqtt.subscribe(MqttLedTopic);
             return true;
         }
         else
@@ -451,7 +408,36 @@ bool MqttReconnect()
     return false;
 }
 
+void MqttCallback(char* topic, byte* payload, unsigned int length) 
+{
+  int u32RGB;
+  uint8_t u8MaxLedsObjs;
 
+  String Buffer(payload, length);
+  MqttLeds = JSON.parse(Buffer);
+
+  Serial.println("Led update message received");
+  Serial.println(topic);
+  Serial.println(JSON.stringify(MqttLeds).c_str());
+
+  u8MaxLedsObjs = min(NO_OF_LEDS, MqttLeds.length());
+
+  for(int i=0; i<u8MaxLedsObjs; i++ )
+  {
+    Serial.println(JSON.stringify(MqttLeds[i]).c_str());
+    u32RGB = MqttLeds[i]["RGB"];
+    LEDS[i].R = (u32RGB&0x00FF0000)>>16;
+    LEDS[i].G = (u32RGB&0x0000FF00)>>8;
+    LEDS[i].B = (u32RGB&0x000000FF)>>0;
+  }
+
+  UpdateLeds();
+
+  Serial.println(LEDS[0].R);
+  Serial.println(LEDS[0].G);
+  Serial.println(LEDS[0].B);
+
+}
 
 long lastMsg = 0;
 char text[128];
@@ -464,17 +450,17 @@ void loop()
 {
   long now = millis();
 
+  if( MqttIsEnabled() )
+  {
+    MqttReconnect();
+    mqtt.setCallback(MqttCallback);
+    mqtt.loop();
+  }
+
   ReadButtons();
   UpdateLeds();
 
   ElegantOTA.loop();
-
-  if( MqttIsEnabled() )
-  {
-    mqtt.loop();
-    MqttReconnect();
-  }
-
 
   if (now - lastMsg > 1000) 
   {
@@ -497,6 +483,16 @@ bool bSwitchOld = true;
 
 void UpdateLeds(void)
 {
+
+  for( int i = 0; i<NO_OF_LEDS; i++)
+  {
+    strip.setPixelColor(i, LEDS[i].G, LEDS[i].R, LEDS[i].B); // it seems that the colour channels are swappd for my LEDs(?)
+                          // G           R           B
+  }
+
+  strip.show();
+
+  /*
   JSONVar LedJson;
   String topic;
   long now = millis();
@@ -521,24 +517,21 @@ void UpdateLeds(void)
     strip.show();
     Serial.println("LED has changed:");
    
-
-    if(MqttIsEnabled() )
-    {
-      topic = SettingsJson["topic"];
-      topic.replace("\"", "");
-      topic = topic + "/GetLed";
-      Serial.println("  - Send to mqtt (Topic: " + topic + ")");
-      mqtt.publish(topic.c_str(), JSON.stringify(LedJson).c_str());
-    }
-
     Serial.println("  - Send to website");
     events.send(JSON.stringify(LedJson).c_str(), "Leds",millis());
+    
   }
   u16LedOld = u16Led;
+  */
+}
+
+void AdsLedCallback(void* pData, size_t len)
+{
+  Serial.println("AdsLedCallback - Fuck Jeah");
 }
 
 long lastBtnRead = 0;
-uint8_t u8BtnOld = 0xFF;
+uint8_t u8BtnOld = 0x0;
 void ReadButtons(void)
 {
 
@@ -565,7 +558,7 @@ void ReadButtons(void)
     for(int i=1; i<=NO_OF_BUTTONS; i++)
     {
       bState = u8Btn&u8Mask;
-      BtnJson["BTN"][i-1] = bState ? 1 : 0;
+      BtnJson[i-1]["state"] = bState ? 1 : 0;
 
       if( u8ChangedButtons & u8Mask ) // Has button changed?
       {
@@ -581,17 +574,20 @@ void ReadButtons(void)
           Serial.println(" released");
         }
 
-        if(MqttIsEnabled() )
-        {
-          Serial.println("  - Send to MQTT Broker");
-          mqtt_send_btn_state(i, bState);
-        }
-
+        //if(MqttIsEnabled() )
+        //{
+        //  Serial.println("  - Send to MQTT Broker");
+        //  mqtt_send_btn_state(i, bState);
+        //}
       }
       u8Mask = u8Mask << 1;
     }
 
-    Serial.println(JSON.stringify(BtnJson).c_str());
+    if( MqttIsEnabled() )
+    {
+      mqtt.publish(MqttBtnTopic, JSON.stringify(BtnJson).c_str());
+      Serial.println("  - Send by MQTT");
+    }
 
     if( AdsIsEnabled() )
     {
@@ -610,59 +606,31 @@ void ReadButtons(void)
 
   u8BtnOld = u8Btn;
 
-
-/*
-  
-  uint16_t u16OutVal;
-  JSONVar BtnJson;
-  long now = millis();
-  String topic;
-  std::string VarName;
-
-
-
-  if (now - lastBtnRead > 10) // every 10 ms
-  {
-    lastBtnRead = now;
-    if( bSwitch != bSwitchOld ) // button has changed?
-    {
-      if( bSwitch )
-        u16OutVal = 1;
-      else
-        u16OutVal = 0;
-
-      BtnJson["BTN"][0] = u16OutVal; 
-      BtnJson["BTN"][1] = 0;
-      BtnJson["BTN"][2] = 0;
-      BtnJson["BTN"][3] = 0;
-      BtnJson["BTN"][4] = 0;
-      BtnJson["BTN"][5] = 0; 
-
-      Serial.println("Button pressed:");
-      #if ENABLE_ETHERNET == 1
-      Serial.println("  - Send to website");
-      events.send(JSON.stringify(BtnJson).c_str(), "Buttons", millis());
-
-//      if(MqttIsEnabled() )
-//      {
-//        topic = SettingsJson["topic"];
-//        topic.replace("\"", "");
-//        topic = topic + "/GetButton";
-//        Serial.println("  - Send to mqtt (Topic: " + topic + ")");
-//        mqtt.publish(topic.c_str(), JSON.stringify(BtnJson).c_str());
-//      }
-
-      if( AdsIsEnabled() )
-      {
-        Serial.println("  - Send to PLC");
-        VarName = std::string(SettingsJson["PlcButtonVar"]);
-        Ads.WritePlcVarByName(VarName, &u16OutVal, sizeof(uint16_t));
-      }
-      #endif // ENABLE_ETHERNET
-    }
-    bSwitchOld = bSwitch;
-  }
-*/
-
 }
 
+
+/*
+
+  [
+    {
+      "RGB": 255
+    },
+    {
+      "RGB": 65280
+    },
+    {
+      "RGB": 16711680
+    },
+    {
+      "RGB": 255
+    },
+    {
+      "RGB": 65280
+    },
+    {
+      "RGB": 16711680
+    }
+  ]
+
+
+*/
