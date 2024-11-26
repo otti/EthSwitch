@@ -512,9 +512,18 @@ void AdsLedCallback(void* pData, size_t len)
   Serial.println("AdsLedCallback - Fuck Jeah");
 }
 
-#warning send last will for buttons
+String CreatButtonJson(uint8_t u8Btn)
+{
+   JSONVar BtnJson;
+   for(int i=0; i<NO_OF_BUTTONS; i++ )
+   {
+       BtnJson[i]["state"] = (u8Btn & (1<<i)) ? 1 : 0;
+   }
 
-long lastBtnRead = 0;
+   return JSON.stringify(BtnJson);
+}
+
+
 uint8_t u8BtnOld = 0x0;
 void ReadButtons(void)
 {
@@ -524,7 +533,6 @@ void ReadButtons(void)
   uint8_t u8ChangedButtons;
   uint8_t u8Mask = 0x01;
   bool bState;
-  JSONVar BtnJson;
 
   if( BUTTON1 ) u8Btn += 0x01;
   if( BUTTON2 ) u8Btn += 0x02;
@@ -543,7 +551,6 @@ void ReadButtons(void)
     {
       bState = u8Btn&u8Mask;
       BtnJson[i-1]["state"] = bState ? 1 : 0;
-
       if( u8ChangedButtons & u8Mask ) // Has button changed?
       {
         Serial.print("Button ");
@@ -569,8 +576,8 @@ void ReadButtons(void)
 
     if( MqttIsEnabled() )
     {
-      mqtt.publish(MqttBtnTopic, JSON.stringify(BtnJson).c_str());
       Serial.println("  - Send by MQTT");
+      mqtt.publish(MqttBtnTopic, CreatButtonJson(u8Btn).c_str());
     }
 
     if( AdsIsEnabled() )
@@ -582,7 +589,7 @@ void ReadButtons(void)
     }
 
     Serial.println("  - Send to website");
-    events.send(JSON.stringify(BtnJson).c_str(), "Buttons", millis());
+    events.send(CreatButtonJson(u8Btn).c_str(), "Buttons", millis());
 
     delay(10); // suppress bouncing button
   }
