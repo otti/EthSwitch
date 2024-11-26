@@ -56,40 +56,44 @@ if (!!window.EventSource) {
 
 function DoIt()
 {
-  UpdateLeds("{\"LED\":[1,0,1,0,1,1]}");
+
 }
 
 function UpdateButtons(BtnJson)
 {
   let obj = JSON.parse(BtnJson);
-  for (let i in obj.BTN)
-  {
-    no = parseInt(i) + 1;
-    id = "BTN" + no;
-    console.log(id);
-    console.log(obj.BTN[i]);
-    if( parseInt(obj.BTN[i]) != 0 )
-      document.getElementById(id).checked = true;
-    else
-      document.getElementById(id).checked = false;
+  console.log(obj.length);
 
+  for (var i = 0; i < obj.length; i++)
+  {
+    BtnId = "BTN" +  (i+1);
+    var state = obj[i];
+
+    if( parseInt(state.state) != 0 )
+      document.getElementById(BtnId).checked = true;
+    else
+      document.getElementById(BtnId).checked = false;
   } 
 }
 
 function UpdateLeds(LedJson)
 {
   let obj = JSON.parse(LedJson);
-  for (let i in obj.LED)
+  console.log(LedJson);
+  for (var i = 0; i < obj.length; i++)
   {
-    no = parseInt(i) + 1;
-    id = "LED" + no;
-    console.log(id);
-    console.log(obj.LED[i]);
-    if( parseInt(obj.LED[i]) != 0 )
-      document.getElementById(id).style.backgroundColor = 'red';
-    else
-      document.getElementById(id).style.backgroundColor = 'transparent';
+    LedId = "LED" + (i+1);
+    console.log(LedId);
+    var color = obj[i];
+    color = parseInt(color.RGB);
 
+    color_hex = "#" + color.toString(16).padStart(6, '0');
+    console.log(color_hex);
+
+    if( color == 0 )
+      document.getElementById(LedId).style.backgroundColor = 'transparent';
+    else
+      document.getElementById(LedId).style.backgroundColor = color_hex;
   } 
 }
 </script>
