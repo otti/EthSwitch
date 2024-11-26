@@ -101,6 +101,7 @@ String MacToStr(const uint8_t* mac)
 // Ethernet MAC: a0:b7:65:dc:c3:53
 String GetClientId()
 {
+  #warning hier noch den namen eintragen
   String ClientId = "EthSwitch_";
   unsigned char mac[6];
   esp_read_mac(mac, ESP_MAC_ETH);
@@ -142,26 +143,6 @@ void UpdateLedsOnWebsite(void)
     Serial.println(JSON.stringify(JsonLeds).c_str());
 }
 
-// u8BtnNo from 1 to NO_OF_BUTTONS
-void mqtt_send_btn_state(uint8_t u8BtnNo, bool state)
-{
-  char topic[128];
-  char msg[5];
-  
-  sprintf(topic, "%s/%s/BTN_CH%i", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"], u8BtnNo);
-  Serial.println(topic);
-
-  if( state )
-    strcpy(msg, "ON");
-  else
-    strcpy(msg, "OFF");
-
-  if( MqttIsEnabled() )
-  {
-    mqtt.publish(topic, msg);
-  }
-
-}
 
 String load_from_file(const char* file_name, String defaultvalue) 
 {
@@ -288,13 +269,13 @@ void setup()
   //ETH.config(local_ip, gateway, subnet, dns1, dns2); // Static IP, leave without this line to get IP via DHCP
 
   Serial.println("ETH.begin()");
-  Serial.println("Link Speed: ");
-  Serial.print(ETH.linkSpeed());
+  Serial.print("  - Link Speed: ");
+  Serial.println(ETH.linkSpeed());
 
-  while(!((uint32_t)ETH.localIP())){}; // Waiting for IP (leave this line group to get IP via DHCP)
+  while(!((uint32_t)ETH.localIP())){}; // Waiting for IP from DHCP
 
   IP = ETH.localIP().toString();
-  Serial.println("IP: " + IP);
+  Serial.println("  - IP: " + IP);
 
   // Config Webserver
  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -320,7 +301,6 @@ void setup()
     for(int i=0;i<paramsNr;i++)
     {
       AsyncWebParameter* p = request->getParam(i);
-  
       doc[p->name()] = p->value();
     }
 
@@ -343,9 +323,10 @@ void setup()
 
   // OTA
   ElegantOTA.begin(&server);    // Start ElegantOTA
+  Serial.println("  - OTA started");
 
   server.begin(); // Start server
-  Serial.println("Web server started");
+  Serial.println("  - Webserver started");
 
   // Config ADS
   if( AdsIsEnabled() )
@@ -360,23 +341,23 @@ void setup()
       
       Ads.SetAddr(&SrcAmsAddr, &DestAmsAddr, (char*)PlcIp.c_str());
       Ads.Connect();
+      Serial.println("  - ADS connected");
   }
   else
   {
-    Serial.println("ADS Disabled");
+    Serial.println("  - ADS Disabled");
   }
 
   if( MqttIsEnabled() )
-    Serial.println("MQTT Enabled");
+    Serial.println("  - MQTT Enabled");
   else
-    Serial.println("MQTT Disabled");
+    Serial.println("  - MQTT Disabled");
 
   
   sprintf(MqttBtnTopic, "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
   sprintf(MqttLedTopic, "%s/%s/LEDS",    (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
 
   UpdateLedsOnWebsite(); // Once after startup
-
 }
 
 
@@ -384,9 +365,10 @@ void setup()
 // -------------------------------------------------------
 // Check the Mqtt status and reconnect if necessary
 // -------------------------------------------------------
-long PreviousConnectTryMillis = 0;
 bool MqttReconnect()
 {
+    static long PreviousConnectTryMillis = 0;
+    
     if (SettingsJson["server"].length() == 0)
     {
         //No server configured
@@ -405,17 +387,16 @@ bool MqttReconnect()
         // Attempt to connect
         if( mqtt.connect(GetClientId().c_str(), (const char*)SettingsJson["user"], (const char*)SettingsJson["pass"]) )
         {
-            Serial.println("  Mqtt connected with ClientId " +  GetClientId());
+            Serial.println("  - Mqtt connected with ClientId " +  GetClientId());
             mqtt.subscribe(MqttLedTopic);
             mqtt.setKeepAlive(15); // 15 s
             return true;
         }
         else
         {
-          
-            Serial.print("  Mqtt connect failed, rc=");
-            Serial.print(mqtt.state());
-            Serial.println(" try again in 5 seconds");
+            Serial.print("  - Mqtt connect failed, rc=");
+            Serial.println(mqtt.state());
+            Serial.println(" - try again in 5 seconds");
         }
 
         PreviousConnectTryMillis = millis(); //Run only once every 5 seconds
@@ -495,9 +476,6 @@ void loop()
 
 }
 
-bool bSwitchOld = true;
-
-
 void UpdateLeds(void)
 {
 
@@ -506,6 +484,9 @@ void UpdateLeds(void)
 
   strip.show();
 }
+
+#warning send last will for buttons
+#warning Online/Offline status
 
 void AdsLedCallback(void* pData, size_t len)
 {
@@ -550,7 +531,7 @@ void ReadButtons(void)
     for(int i=1; i<=NO_OF_BUTTONS; i++)
     {
       bState = u8Btn&u8Mask;
-      BtnJson[i-1]["state"] = bState ? 1 : 0;
+
       if( u8ChangedButtons & u8Mask ) // Has button changed?
       {
         Serial.print("Button ");
@@ -564,12 +545,6 @@ void ReadButtons(void)
         {
           Serial.println(" released");
         }
-
-        //if(MqttIsEnabled() )
-        //{
-        //  Serial.println("  - Send to MQTT Broker");
-        //  mqtt_send_btn_state(i, bState);
-        //}
       }
       u8Mask = u8Mask << 1;
     }
@@ -598,30 +573,3 @@ void ReadButtons(void)
   u8BtnOld = u8Btn;
 
 }
-
-
-/*
-
-  [
-    {
-      "RGB": 255
-    },
-    {
-      "RGB": 65280
-    },
-    {
-      "RGB": 16711680
-    },
-    {
-      "RGB": 255
-    },
-    {
-      "RGB": 65280
-    },
-    {
-      "RGB": 16711680
-    }
-  ]
-
-
-*/
