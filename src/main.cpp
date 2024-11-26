@@ -128,6 +128,20 @@ bool AdsIsEnabled(void)
     return false;
 }
 
+void UpdateLedsOnWebsite(void)
+{
+    JSONVar JsonLeds;
+    for( int i = 0; i<NO_OF_LEDS; i++ )
+    {
+      JsonLeds[i]["RGB"] = LEDS[i].R * 0x10000 + LEDS[i].G * 0x100 + LEDS[i].B; 
+    }
+    
+    events.send(JSON.stringify(JsonLeds).c_str(), "Leds",millis());
+    Serial.println("Update LEDs on Website");
+    Serial.print("  - ");
+    Serial.println(JSON.stringify(JsonLeds).c_str());
+}
+
 // u8BtnNo from 1 to NO_OF_BUTTONS
 void mqtt_send_btn_state(uint8_t u8BtnNo, bool state)
 {
@@ -268,16 +282,14 @@ void setup()
     delay(150);
   }
 
-  //fade(2);
-
-
   // Ethernet
   ETH.begin(ETH_ADDR, ETH_RESET, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLOCK_GPIO17_OUT); // Enable ETH
   ETH.setHostname("EthSwitch");
   //ETH.config(local_ip, gateway, subnet, dns1, dns2); // Static IP, leave without this line to get IP via DHCP
+
+  Serial.println("ETH.begin()");
   Serial.println("Link Speed: ");
   Serial.print(ETH.linkSpeed());
-  Serial.println("ETH.begin()");
 
   while(!((uint32_t)ETH.localIP())){}; // Waiting for IP (leave this line group to get IP via DHCP)
 
@@ -363,6 +375,8 @@ void setup()
   sprintf(MqttBtnTopic, "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
   sprintf(MqttLedTopic, "%s/%s/LEDS",    (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
 
+  UpdateLedsOnWebsite(); // Once after startup
+
 }
 
 
@@ -408,7 +422,7 @@ bool MqttReconnect()
     return false;
 }
 
-void MqttCallback(char* topic, byte* payload, unsigned int length) 
+void MqttLedCallback(char* topic, byte* payload, unsigned int length) 
 {
   int u32RGB;
   uint8_t u8MaxLedsObjs;
@@ -417,27 +431,29 @@ void MqttCallback(char* topic, byte* payload, unsigned int length)
   MqttLeds = JSON.parse(Buffer);
 
   Serial.println("Led update message received");
-  Serial.println(topic);
+  Serial.print("  - ");
   Serial.println(JSON.stringify(MqttLeds).c_str());
 
   u8MaxLedsObjs = min(NO_OF_LEDS, MqttLeds.length());
 
   for(int i=0; i<u8MaxLedsObjs; i++ )
   {
-    Serial.println(JSON.stringify(MqttLeds[i]).c_str());
+    //Serial.println(JSON.stringify(MqttLeds[i]).c_str());
     u32RGB = MqttLeds[i]["RGB"];
     LEDS[i].R = (u32RGB&0x00FF0000)>>16;
     LEDS[i].G = (u32RGB&0x0000FF00)>>8;
     LEDS[i].B = (u32RGB&0x000000FF)>>0;
   }
 
+  UpdateLedsOnWebsite();
   UpdateLeds();
 
-  Serial.println(LEDS[0].R);
-  Serial.println(LEDS[0].G);
-  Serial.println(LEDS[0].B);
-
+  //Serial.println(LEDS[0].R);
+  //Serial.println(LEDS[0].G);
+  //Serial.println(LEDS[0].B);
 }
+
+
 
 long lastMsg = 0;
 char text[128];
@@ -453,7 +469,7 @@ void loop()
   if( MqttIsEnabled() )
   {
     MqttReconnect();
-    mqtt.setCallback(MqttCallback);
+    mqtt.setCallback(MqttLedCallback);
     mqtt.loop();
   }
 
@@ -485,50 +501,17 @@ void UpdateLeds(void)
 {
 
   for( int i = 0; i<NO_OF_LEDS; i++)
-  {
     strip.setPixelColor(i, LEDS[i].G, LEDS[i].R, LEDS[i].B); // it seems that the colour channels are swappd for my LEDs(?)
-                          // G           R           B
-  }
 
   strip.show();
-
-  /*
-  JSONVar LedJson;
-  String topic;
-  long now = millis();
-
-  if( u16Led != u16LedOld || bNewConnection ) // Leds have changed
-  {
-    bNewConnection = false;
-    for(int i=0; i<6; i++ )
-    {
-      if( u16Led&(0x01<<i) )
-      {
-        LedJson["LED"][i] = 1; 
-        strip.setPixelColor(i, 0, 50, 0);
-      }
-      else
-      {
-        LedJson["LED"][i] = 0; 
-        strip.setPixelColor(i, 0, 0, 0);
-      }
-    }
-
-    strip.show();
-    Serial.println("LED has changed:");
-   
-    Serial.println("  - Send to website");
-    events.send(JSON.stringify(LedJson).c_str(), "Leds",millis());
-    
-  }
-  u16LedOld = u16Led;
-  */
 }
 
 void AdsLedCallback(void* pData, size_t len)
 {
   Serial.println("AdsLedCallback - Fuck Jeah");
 }
+
+#warning send last will for buttons
 
 long lastBtnRead = 0;
 uint8_t u8BtnOld = 0x0;
