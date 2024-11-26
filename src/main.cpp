@@ -407,6 +407,7 @@ bool MqttReconnect()
         {
             Serial.println("  Mqtt connected with ClientId " +  GetClientId());
             mqtt.subscribe(MqttLedTopic);
+            mqtt.setKeepAlive(15); // 15 s
             return true;
         }
         else
