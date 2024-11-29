@@ -27,6 +27,7 @@ const char sConfigPage[] PROGMEM = R"=====(
       <input id="topic" name="topic" type="text" onchange="UpdateTopics()"><br><br>
       <p id="ButtonTopic">foo</p>
       <p id="LedTopic">bar</p>
+      <p id="StatusTopic">bar</p>
   
       <h3>TwinCAT ADS Settings</h3>
       
@@ -69,11 +70,13 @@ const char sConfigPage[] PROGMEM = R"=====(
       BaseTopic = document.getElementById("topic").value;
       DevName   = document.getElementById("DevName").value;
   
-      var BtnTopic = "Button Topic: " + BaseTopic + "/" + DevName + "/Buttons" ;
-      var LedTopic = "Led Topic: " + BaseTopic + "/" + DevName + "/LEDS";
+      var BtnTopic    = "Button Topic: " + BaseTopic + "/" + DevName + "/Buttons" ;
+      var LedTopic    = "Led Topic: "    + BaseTopic + "/" + DevName + "/LEDS";
+      var StatusTopic = "Status Topic: " + BaseTopic + "/" + DevName + "/Status";
   
       document.getElementById("ButtonTopic").innerHTML = BtnTopic;
       document.getElementById("LedTopic").innerHTML    = LedTopic;
+      document.getElementById("StatusTopic").innerHTML    = StatusTopic;
     }
   
     </script>
