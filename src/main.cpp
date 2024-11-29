@@ -43,27 +43,32 @@
 #define ETH_MDIO_PIN              18
 #define ETH_TYPE                  ETH_PHY_LAN8720
 
-
-
 #define FORMAT_LITTLEFS_IF_FAILED true
 
-void ReadButtons(void);
-void UpdateLeds(void);
+
 
 // Webserver
+// ---------------------------------------------------------
 AsyncWebServer  server(80); // Declare the WebServer object
 AsyncEventSource events("/events");
 
 // MQTT
+// ---------------------------------------------------------
 WiFiClient    ethClient;
 PubSubClient  mqtt(ethClient);
 
+char MqttTopicBtn[128];
+char MqttTopicLed[128];
+char MqttTopicStatus[128];
+
 // ADS
+// ---------------------------------------------------------
 ADS::AmsAddr SrcAmsAddr((char*)"1.1.1.1.1.1", 43609);
 ADS::AmsAddr DestAmsAddr((char*)"1.1.1.1.1.1", AMSPORT_R0_PLC_TC3);
 ADS::Ads Ads;
 
 // Website
+// ---------------------------------------------------------
 String  sSettings;
 JSONVar SettingsJson;
 JSONVar MqttLeds;
@@ -73,11 +78,29 @@ String load_from_file(const char* file_name, String defaultvalue) ;
 File         this_file;
 bool bNewConnection = false;
 
+// Neo Pixel
+// ---------------------------------------------------------
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NO_OF_LEDS, NEO_PIXEL_PIN, NEO_RGB + NEO_KHZ800);
 
-char MqttBtnTopic[128];
-char MqttLedTopic[128];
+// Prototypes
+// ---------------------------------------------------------
+void loop();
+void setup();
+bool MqttReconnect();
+String GetClientId();
+void UpdateLeds(void);
+void ReadButtons(void);
+bool AdsIsEnabled(void);
+bool MqttIsEnabled(void);
+void UpdateLedsOnWebsite(void);
+String MacToStr(const uint8_t* mac);
+float MCP9700_GetTemperature(uint16_t u16AdcRawValue);
+bool write_to_file(const char* file_name, String contents);
+String load_from_file(const char* file_name, String defaultvalue);
+void MqttLedCallback(char* topic, byte* payload, unsigned int length);
 
+// Structs
+// ---------------------------------------------------------
 typedef struct 
 {
   uint8_t R;
@@ -85,9 +108,12 @@ typedef struct
   uint8_t B;
 }sLed_t;
 
+// Global var.
+// ---------------------------------------------------------
+char MqttStatusOnline[]  = "{\"Status\":\"Online\"}";
+char MqttStatusOffline[] = "{\"Status\":\"Offline\"}"; // Last Will
 
 sLed_t LEDS[NO_OF_LEDS];
-
 
 String MacToStr(const uint8_t* mac)
 {
@@ -98,13 +124,13 @@ String MacToStr(const uint8_t* mac)
   return result;
 }
 
-// Ethernet MAC: a0:b7:65:dc:c3:53
+
 String GetClientId()
 {
-  #warning hier noch den namen eintragen
-  String ClientId = "EthSwitch_";
+  String ClientId = (const char*)SettingsJson["DevName"];
   unsigned char mac[6];
   esp_read_mac(mac, ESP_MAC_ETH);
+  ClientId += "_";
   ClientId += MacToStr(mac);
   return ClientId;
 }
@@ -133,16 +159,13 @@ void UpdateLedsOnWebsite(void)
 {
     JSONVar JsonLeds;
     for( int i = 0; i<NO_OF_LEDS; i++ )
-    {
       JsonLeds[i]["RGB"] = LEDS[i].R * 0x10000 + LEDS[i].G * 0x100 + LEDS[i].B; 
-    }
     
     events.send(JSON.stringify(JsonLeds).c_str(), "Leds",millis());
     Serial.println("Update LEDs on Website");
     Serial.print("  - ");
     Serial.println(JSON.stringify(JsonLeds).c_str());
 }
-
 
 String load_from_file(const char* file_name, String defaultvalue) 
 {
@@ -164,15 +187,13 @@ String load_from_file(const char* file_name, String defaultvalue)
 bool write_to_file(const char* file_name, String contents)
 {
   File this_file = LittleFS.open(file_name, "w");
-  if (!this_file) { // failed to open the file, return false
+  if (!this_file) // failed to open the file, return false
       return false;
-  }
 
   int bytesWritten = this_file.print(contents);
 
-  if (bytesWritten == 0) { // write failed
+  if (bytesWritten == 0)// write failed
       return false;
-  }
 
   this_file.close();
   return true;
@@ -214,14 +235,20 @@ void setup()
   pinMode(BTN5_PIN, INPUT_PULLDOWN);
   pinMode(BTN6_PIN, INPUT_PULLDOWN);
 
-
   // User LED
   pinMode(EXT_LED_PIN, OUTPUT);
 
   // Serial
   Serial.begin(115200);
-  delay(2500); // The serial monitor needs some time to start up after programming
-  Serial.println("hello");
+
+  // LED will blink 5 times
+  for(int i=0; i<10; i++)
+  {
+    PIN_TOGGLE(EXT_LED_PIN);
+    delay(100);
+  }
+
+  Serial.println("Starting up ...");
 
 /*
   pinMode(TEMP_SENS_PIN, ANALOG);
@@ -250,6 +277,7 @@ void setup()
   Serial.println("Current settings:");
   Serial.println(sSettings);
 
+  // Init Neo Pixel
   strip.begin();
   strip.setBrightness(50);             // set the maximum LED intensity down to 50
 
@@ -257,42 +285,37 @@ void setup()
   memset(LEDS, 0, sizeof(LEDS));
   UpdateLeds();
 
-  for(int i=0; i<10; i++)
-  {
-    PIN_TOGGLE(EXT_LED_PIN);
-    delay(150);
-  }
-
   // Ethernet
-  ETH.begin(ETH_ADDR, ETH_RESET, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLOCK_GPIO17_OUT); // Enable ETH
+  ETH.begin(ETH_ADDR, ETH_RESET, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLOCK_GPIO17_OUT);
   ETH.setHostname("EthSwitch");
   //ETH.config(local_ip, gateway, subnet, dns1, dns2); // Static IP, leave without this line to get IP via DHCP
 
   Serial.println("ETH.begin()");
   Serial.print("  - Link Speed: ");
-  Serial.println(ETH.linkSpeed());
+  Serial.print(ETH.linkSpeed());
+  Serial.print(" Mbit");
 
   while(!((uint32_t)ETH.localIP())){}; // Waiting for IP from DHCP
 
   IP = ETH.localIP().toString();
   Serial.println("  - IP: " + IP);
 
-  // Config Webserver
- server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+  // Default website requested
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", sIndexPage);
   });
 
+  // Config wesite requested
   server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request)
   {
     String sJsonTxData =  "<!DOCTYPE html>\r\n<html>\r\n<script> var CurrentValues = '" + String(sSettings) + "'; </script>";
     Serial.print("Current settings: ");
     Serial.println(sSettings);
-    //server.send(200, "text/html", sJsonTxData+ String(sConfigPage));
     sJsonTxData = sJsonTxData + String(sConfigPage);
     request->send_P(200, "text/html", sJsonTxData.c_str());
   });
 
-  // Save new config to file
+  // Save button on config website has been pressed --> Save new config to file
   server.on("/save_new_config_data", HTTP_GET, [](AsyncWebServerRequest *request)
   {
     int paramsNr = request->params();
@@ -314,24 +337,24 @@ void setup()
     ESP.restart();
   });
 
-
+  // Add event handler for live update of website
   server.addHandler(&events);
   events.onConnect([](AsyncEventSourceClient *client){
     Serial.println("Website is connected --> Send LED state");
     bNewConnection = true;
   });
 
-  // OTA
-  ElegantOTA.begin(&server);    // Start ElegantOTA
+  // Over The Ait Update (OTA)
+  ElegantOTA.begin(&server); // Start ElegantOTA
   Serial.println("  - OTA started");
 
-  server.begin(); // Start server
+  server.begin(); // Start webserver
   Serial.println("  - Webserver started");
 
   // Config ADS
   if( AdsIsEnabled() )
   {
-      Serial.println("ADS Enabled");
+      Serial.println("  - ADS Enabled");
       PlcIp = SettingsJson["PlcIp"];
       DestNetId = SettingsJson["PlcAmsAddr"];
       DestAmsAddr.Change((char*)DestNetId.c_str(), AMSPORT_R0_PLC_TC3);
@@ -341,7 +364,7 @@ void setup()
       
       Ads.SetAddr(&SrcAmsAddr, &DestAmsAddr, (char*)PlcIp.c_str());
       Ads.Connect();
-      Serial.println("  - ADS connected");
+      Serial.println("    - ADS connected");
   }
   else
   {
@@ -353,18 +376,18 @@ void setup()
   else
     Serial.println("  - MQTT Disabled");
 
+  // Create variables for MQTT toppics (LEDs, Buttons and Status)
+  sprintf(MqttTopicBtn,      "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
+  sprintf(MqttTopicLed,      "%s/%s/LEDS",    (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
+  sprintf(MqttTopicStatus,   "%s/%s/Status",  (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
   
-  sprintf(MqttBtnTopic, "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
-  sprintf(MqttLedTopic, "%s/%s/LEDS",    (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
-
-  UpdateLedsOnWebsite(); // Once after startup
+  // Send the current LED state to website once after start up
+  UpdateLedsOnWebsite();
 }
 
 
-
-// -------------------------------------------------------
-// Check the Mqtt status and reconnect if necessary
-// -------------------------------------------------------
+// Check the Mqtt connection state and reconnect if necessary
+// ----------------------------------------------------------
 bool MqttReconnect()
 {
     static long PreviousConnectTryMillis = 0;
@@ -385,11 +408,12 @@ bool MqttReconnect()
         mqtt.setServer(SettingsJson["server"], atoi(SettingsJson["port"]));
 
         // Attempt to connect
-        if( mqtt.connect(GetClientId().c_str(), (const char*)SettingsJson["user"], (const char*)SettingsJson["pass"]) )
+        if( mqtt.connect(GetClientId().c_str(), (const char*)SettingsJson["user"], (const char*)SettingsJson["pass"], MqttTopicStatus, MQTTQOS1, true, MqttStatusOffline) )
         {
             Serial.println("  - Mqtt connected with ClientId " +  GetClientId());
-            mqtt.subscribe(MqttLedTopic);
+            mqtt.subscribe(MqttTopicLed);
             mqtt.setKeepAlive(15); // 15 s
+            mqtt.publish(MqttTopicStatus, MqttStatusOnline, true);
             return true;
         }
         else
@@ -404,6 +428,7 @@ bool MqttReconnect()
     return false;
 }
 
+// Will be called if the MQTT LED topic has new data --> Update LEDs and website
 void MqttLedCallback(char* topic, byte* payload, unsigned int length) 
 {
   int u32RGB;
@@ -435,18 +460,13 @@ void MqttLedCallback(char* topic, byte* payload, unsigned int length)
   //Serial.println(LEDS[0].B);
 }
 
-
-
-long lastMsg = 0;
-char text[128];
-
-uint16_t u16Led;
-uint16_t u16LedOld = 0xFFFF;
 std::string VarName;
 
 void loop()
 {
+  static long LastAdsReadTime = 0;
   long now = millis();
+  uint16_t u16Led;
 
   if( MqttIsEnabled() )
   {
@@ -460,9 +480,11 @@ void loop()
 
   ElegantOTA.loop();
 
-  if (now - lastMsg > 1000) 
+  // to do: replace polling by notifications
+  //        Variable will be read from PLC but not used yet
+  if( AdsIsEnabled() )
   {
-    if( AdsIsEnabled() )
+    if (now - LastAdsReadTime > 1000) 
     {
       VarName = std::string(SettingsJson["PlcLedVar"]);
       if( VarName.length() > 3 ) // no variable name set in config
@@ -471,22 +493,17 @@ void loop()
         Serial.println("Read Led from PLC: " + String(u16Led));
       }
     }
-    lastMsg = now;
+    LastAdsReadTime = now;
   }
-
 }
 
 void UpdateLeds(void)
 {
-
   for( int i = 0; i<NO_OF_LEDS; i++)
     strip.setPixelColor(i, LEDS[i].G, LEDS[i].R, LEDS[i].B); // it seems that the colour channels are swappd for my LEDs(?)
 
   strip.show();
 }
-
-#warning send last will for buttons
-#warning Online/Offline status
 
 void AdsLedCallback(void* pData, size_t len)
 {
@@ -505,15 +522,15 @@ String CreatButtonJson(uint8_t u8Btn)
 }
 
 
-uint8_t u8BtnOld = 0x0;
+
 void ReadButtons(void)
 {
-
-  uint8_t u8Btn = 0;
+  static uint8_t u8BtnOld = 0x0;
+  uint8_t  u8Btn = 0;
   uint16_t u16Btn; // muss in der PLC noch auf USINT umgestellt werden
-  uint8_t u8ChangedButtons;
-  uint8_t u8Mask = 0x01;
-  bool bState;
+  uint8_t  u8ChangedButtons;
+  uint8_t  u8Mask = 0x01;
+  bool     bState;
 
   if( BUTTON1 ) u8Btn += 0x01;
   if( BUTTON2 ) u8Btn += 0x02;
@@ -552,7 +569,7 @@ void ReadButtons(void)
     if( MqttIsEnabled() )
     {
       Serial.println("  - Send by MQTT");
-      mqtt.publish(MqttBtnTopic, CreatButtonJson(u8Btn).c_str());
+      mqtt.publish(MqttTopicBtn, CreatButtonJson(u8Btn).c_str());
     }
 
     if( AdsIsEnabled() )
