@@ -17,7 +17,7 @@
 #define NEO_PIXEL_PIN 5
 
 #define NO_OF_BUTTONS     6
-#define NO_OF_LEDS        1
+#define NO_OF_LEDS        6
 
 #define BTN1_PIN 4
 #define BTN2_PIN 32
@@ -84,6 +84,7 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NO_OF_LEDS, NEO_PIXEL_PIN, NEO_RGB +
 // ---------------------------------------------------------
 void loop();
 void setup();
+void LedTest(void);
 bool MqttReconnect();
 String GetClientId();
 void UpdateLeds(void);
@@ -278,6 +279,7 @@ void setup()
   // Init Neo Pixel
   strip.begin();
   strip.setBrightness(50);             // set the maximum LED intensity down to 50
+LedTest();
 
   // Turn all LEDs off
   memset(LEDS, 0, sizeof(LEDS));
@@ -491,14 +493,43 @@ void loop()
         Serial.println("Read Led from PLC: " + String(u16Led));
       }
     }
-    LastAdsReadTime = now;
+    }
+
+  if (now - LastAliveLedTime > 500) 
+  {
+    LastAliveLedTime = now;
+    PIN_TOGGLE(EXT_LED_PIN);
   }
+}
+
+
+// Button order          LED order
+//  ╔═══════╦═══════╗    ╔═══════╦═══════╗
+//  ║   1   ║   4   ║    ║   1   ║   6   ║  
+//  ╠═══════║═══════╣    ╠═══════║═══════╣
+//  ║   2   ║   5   ║    ║   2   ║   5   ║  
+//  ╠═══════║═══════╣    ╠═══════║═══════╣
+//  ║   3   ║   6   ║    ║   3   ║   4   ║
+//  ╚═══════╩═══════╝    ╚═══════╩═══════╝  
+           
+uint8_t au8LedOrder[] = {0, 1, 2, 5, 4, 3};
+
+void LedTest(void)
+{
+  for(long firstPixelHue = 0; firstPixelHue < 2*65536; firstPixelHue += 256) {
+    strip.rainbow(firstPixelHue);
+    strip.show(); // Update strip
+    delay(10);    // Pause for a moment
+  }
+
+  strip.clear();
+  strip.show(); // Update strip
 }
 
 void UpdateLeds(void)
 {
   for( int i = 0; i<NO_OF_LEDS; i++)
-    strip.setPixelColor(i, LEDS[i].G, LEDS[i].R, LEDS[i].B); // it seems that the colour channels are swappd for my LEDs(?)
+    strip.setPixelColor(au8LedOrder[i], LEDS[i].G, LEDS[i].R, LEDS[i].B); // it seems that the colour channels are swappd for my LEDs(?)
 
   strip.show();
 }
