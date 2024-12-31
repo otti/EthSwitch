@@ -295,7 +295,11 @@ LedTest();
   Serial.print(ETH.linkSpeed());
   Serial.print(" Mbit");
 
-  while(!((uint32_t)ETH.localIP())){}; // Waiting for IP from DHCP
+  while(!((uint32_t)ETH.localIP()))
+  {
+    delay(100);
+    PIN_TOGGLE(EXT_LED_PIN);
+  }; // Waiting for IP from DHCP
 
   IP = ETH.localIP().toString();
   Serial.println("  - IP: " + IP);
@@ -575,8 +579,6 @@ void ReadButtons(void)
   
   if( u8ChangedButtons )
   {
-    PIN_TOGGLE(EXT_LED_PIN);
-
     for(int i=1; i<=NO_OF_BUTTONS; i++)
     {
       bState = u8Btn&u8Mask;
