@@ -10,8 +10,6 @@
 
 #include "config.html"
 #include "index.html"
-#include "ParInSerOutShiftReg.h"
-
 
 // Inputs/Outputs
 #define EXT_LED_PIN   2
