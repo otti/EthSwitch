@@ -269,6 +269,10 @@ void setup()
   // Little FS
   LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED);
 
+  // force defaults
+  //#warning entfernen
+  //write_to_file(settingsfile, DEFAULT_SETTINGS);
+
   // Load settings from filesystem
   sSettings = load_from_file(settingsfile,  DEFAULT_SETTINGS);
   SettingsJson = JSON.parse(sSettings);
@@ -279,7 +283,7 @@ void setup()
   // Init Neo Pixel
   strip.begin();
   strip.setBrightness(50);             // set the maximum LED intensity down to 50
-LedTest();
+  LedTest();
 
   // Turn all LEDs off
   memset(LEDS, 0, sizeof(LEDS));
@@ -374,20 +378,20 @@ LedTest();
   {
     Serial.println("  - ADS Disabled");
   }
-
+  
   if( MqttIsEnabled() )
   {
     Serial.println("  - MQTT Enabled");
-  // Create variables for MQTT toppics (LEDs, Buttons and Status)
-  sprintf(MqttTopicBtn,      "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
-  sprintf(MqttTopicLed,      "%s/%s/LEDS",    (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
-  sprintf(MqttTopicStatus,   "%s/%s/Status",  (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
+      // Create variables for MQTT toppics (LEDs, Buttons and Status)
+    sprintf(MqttTopicBtn,      "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
+    sprintf(MqttTopicLed,      "%s/%s/LEDS",    (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
+    sprintf(MqttTopicStatus,   "%s/%s/Status",  (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
   }
   else
   {
     Serial.println("  - MQTT Disabled");
   }
-  
+
   // Send the current LED state to website once after start up
   UpdateLedsOnWebsite();
 }
@@ -471,7 +475,8 @@ std::string VarName;
 
 void loop()
 {
-  static long LastAdsReadTime = 0;
+  static long LastAdsReadTime  = 0;
+  static long LastAliveLedTime = 0;
   long now = millis();
   uint16_t u16Led;
 
@@ -493,6 +498,7 @@ void loop()
   {
     if (now - LastAdsReadTime > 1000) 
     {
+      LastAdsReadTime = now;
       VarName = std::string(SettingsJson["PlcLedVar"]);
       if( VarName.length() > 3 ) // no variable name set in config
       {
@@ -500,7 +506,7 @@ void loop()
         Serial.println("Read Led from PLC: " + String(u16Led));
       }
     }
-    }
+  }
 
   if (now - LastAliveLedTime > 500) 
   {
