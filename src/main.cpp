@@ -71,7 +71,7 @@ String  sSettings;
 JSONVar SettingsJson;
 JSONVar MqttLeds;
 const static char* settingsfile    = "/settings";
-#define DEFAULT_SETTINGS "{\"DevName\": \"EthSwitch\", \"server\": \"mosquitto.lan\", \"port\": \"1883\", \"user\": \"\", \"pass\": \"\", \"topic\": \"trash\", \"PlcIp\" : \"plc.lan\", \"PlcAmsAddr\" : \"5.16.3.178.1.1\", \"PlcLedVar\": \"Main.u16LED\", \"PlcButtonVar\": \"Main.u16Button\" }"
+#define DEFAULT_SETTINGS "{\"DevName\": \"EthSwitch\", \"server\": \"\", \"port\": \"1883\", \"user\": \"\", \"pass\": \"\", \"topic\": \"trash\", \"PlcIp\" : \"\", \"PlcAmsAddr\" : \"5.16.3.178.1.1\", \"PlcLedVar\": \"Main.u16LED\", \"PlcButtonVar\": \"Main.u16Button\" }"
 String load_from_file(const char* file_name, String defaultvalue) ;
 File         this_file;
 bool bNewConnection = false;
@@ -372,14 +372,17 @@ LedTest();
   }
 
   if( MqttIsEnabled() )
+  {
     Serial.println("  - MQTT Enabled");
-  else
-    Serial.println("  - MQTT Disabled");
-
   // Create variables for MQTT toppics (LEDs, Buttons and Status)
   sprintf(MqttTopicBtn,      "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
   sprintf(MqttTopicLed,      "%s/%s/LEDS",    (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
   sprintf(MqttTopicStatus,   "%s/%s/Status",  (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"]);
+  }
+  else
+  {
+    Serial.println("  - MQTT Disabled");
+  }
   
   // Send the current LED state to website once after start up
   UpdateLedsOnWebsite();
