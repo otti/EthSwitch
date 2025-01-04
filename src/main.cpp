@@ -12,27 +12,16 @@
 #include "index.html"
 #include "Telnet.h"
 
-// Inputs/Outputs
+#define NO_OF_CHANNELS 6 // Number of LEDs and Buttons
+
+// Pin definitions
+// ---------------------------------------------------------
 #define EXT_LED_PIN   2
 #define TEMP_SENS_PIN 35
 #define NEO_PIXEL_PIN 5
 
-#define NO_OF_BUTTONS     6
-#define NO_OF_LEDS        6
-
-#define BTN1_PIN 4
-#define BTN2_PIN 32
-#define BTN3_PIN 15
-#define BTN4_PIN 14
-#define BTN5_PIN 33
-#define BTN6_PIN 34
-
-#define BUTTON1 digitalRead(BTN1_PIN)
-#define BUTTON2 digitalRead(BTN2_PIN)
-#define BUTTON3 digitalRead(BTN3_PIN)
-#define BUTTON4 digitalRead(BTN4_PIN)
-#define BUTTON5 digitalRead(BTN5_PIN)
-#define BUTTON6 digitalRead(BTN6_PIN)
+// Button Pins                1st, 2nd, 3rd, 4th, 5th, 6th 
+const uint8_t au8BtnPins[] = {4,   32,  15,  14,  33,  34};
 
 #define PIN_TOGGLE(p) digitalWrite(p, !digitalRead(p));
 
@@ -44,7 +33,7 @@
 
 #define FORMAT_LITTLEFS_IF_FAILED true
 
-
+#define FOR_EACH_CH(x) for(int x=0; x<NO_OF_CHANNELS; x++)
 
 // Webserver
 // ---------------------------------------------------------
@@ -83,7 +72,7 @@ extern ESPTelnet telnet;
 
 // Neo Pixel
 // ---------------------------------------------------------
-Adafruit_NeoPixel strip = Adafruit_NeoPixel(NO_OF_LEDS, NEO_PIXEL_PIN, NEO_RGB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NO_OF_CHANNELS, NEO_PIXEL_PIN, NEO_RGB + NEO_KHZ800);
 
 // Prototypes
 // ---------------------------------------------------------
@@ -117,7 +106,7 @@ typedef struct
 char MqttStatusOnline[]  = "{\"Status\":\"Online\"}";
 char MqttStatusOffline[] = "{\"Status\":\"Offline\"}"; // Last Will
 
-sLed_t LEDS[NO_OF_LEDS];
+sLed_t LEDS[NO_OF_CHANNELS];
 
 String MacToStr(const uint8_t* mac)
 {
@@ -162,8 +151,10 @@ bool AdsIsEnabled(void)
 void UpdateLedsOnWebsite(void)
 {
     JSONVar JsonLeds;
-    for( int i = 0; i<NO_OF_LEDS; i++ )
+    FOR_EACH_CH(i)
+    {
       JsonLeds[i]["RGB"] = LEDS[i].R * 0x10000 + LEDS[i].G * 0x100 + LEDS[i].B; 
+    }
     
     events.send(JSON.stringify(JsonLeds).c_str(), "Leds",millis());
     Serial.println("Update LEDs on Website");
@@ -232,13 +223,11 @@ void setup()
   // Inputs and Outputs
   // ---------------------------------------------
 
-  // Buttons
-  pinMode(BTN1_PIN, INPUT_PULLDOWN);
-  pinMode(BTN2_PIN, INPUT_PULLDOWN);
-  pinMode(BTN3_PIN, INPUT_PULLDOWN);
-  pinMode(BTN4_PIN, INPUT_PULLDOWN);
-  pinMode(BTN5_PIN, INPUT_PULLDOWN);
-  pinMode(BTN6_PIN, INPUT_PULLDOWN);
+  // Activate pull down for buttons
+  FOR_EACH_CH(i)
+  {
+    pinMode(au8BtnPins[i], INPUT_PULLDOWN);  
+  }
 
   // User LED
   pinMode(EXT_LED_PIN, OUTPUT);
@@ -304,10 +293,11 @@ void setup()
   Serial.print(ETH.linkSpeed());
   Serial.print(" Mbit");
 
-  while(!((uint32_t)ETH.localIP()))  // Waiting for IP from DHCP
+  // Waiting for IP from DHCP
+  while(!((uint32_t)ETH.localIP()))
   {
     strip.rainbow(hue);
-    strip.fill(0, 1, NO_OF_LEDS-1); // Ranbow only on first LED --> Clear all others
+    strip.fill(0, 1, NO_OF_CHANNELS-1); // Ranbow only on first LED --> Clear all others
     strip.show(); // Update strip
     delay(10);    // Pause for a moment
     hue += 256;
@@ -363,7 +353,7 @@ void setup()
     bNewConnection = true;
   });
 
-  // Over The Ait Update (OTA)
+  // Over The Air Update (OTA)
   ElegantOTA.begin(&server); // Start ElegantOTA
   Serial.println("  - OTA started");
 
@@ -471,7 +461,7 @@ void MqttLedCallback(char* topic, byte* payload, unsigned int length)
   //Serial.print("  - ");
   //Serial.println(JSON.stringify(MqttLeds).c_str());
 
-  u8MaxLedsObjs = min(NO_OF_LEDS, MqttLeds.length());
+  u8MaxLedsObjs = min(NO_OF_CHANNELS, MqttLeds.length());
 
   for(int i=0; i<u8MaxLedsObjs; i++ )
   {
@@ -536,7 +526,7 @@ void loop()
 }
 
 
-// Button order          LED order
+//  Button order         LED order
 //  ╔═══════╦═══════╗    ╔═══════╦═══════╗
 //  ║   1   ║   4   ║    ║   1   ║   6   ║  
 //  ╠═══════║═══════╣    ╠═══════║═══════╣
@@ -547,6 +537,7 @@ void loop()
            
 uint8_t au8LedOrder[] = {0, 1, 2, 5, 4, 3};
 
+// Show a rainbow pattern for a few seconds on all LEDs after startup
 void LedTest(void)
 {
   for(long firstPixelHue = 0; firstPixelHue < 2*65536; firstPixelHue += 256) {
@@ -555,14 +546,17 @@ void LedTest(void)
     delay(10);    // Pause for a moment
   }
 
-  strip.clear();
-  strip.show(); // Update strip
+  strip.clear(); // clear all LEDs 
+  strip.show();  // Update strip
 }
 
+// Update LEDs after receiving a new MQTT or ADS message
 void UpdateLeds(void)
 {
-  for( int i = 0; i<NO_OF_LEDS; i++)
+  FOR_EACH_CH(i)
+  {
     strip.setPixelColor(au8LedOrder[i], LEDS[i].G, LEDS[i].R, LEDS[i].B); // it seems that the colour channels are swappd for my LEDs(?)
+  }
 
   strip.show();
 }
@@ -572,18 +566,17 @@ void AdsLedCallback(void* pData, size_t len)
   Serial.println("AdsLedCallback - Fuck Jeah");
 }
 
+// Create a new JSON message containing the button states to send via MQTT
 String CreatButtonJson(uint8_t u8Btn)
 {
    JSONVar BtnJson;
-   for(int i=0; i<NO_OF_BUTTONS; i++ )
+   FOR_EACH_CH(i)
    {
        BtnJson[i]["state"] = (u8Btn & (1<<i)) ? 1 : 0;
    }
 
    return JSON.stringify(BtnJson);
 }
-
-
 
 void ReadButtons(void)
 {
@@ -595,25 +588,25 @@ void ReadButtons(void)
   bool     bState;
   String   DbgText;
 
-  if( BUTTON1 ) u8Btn += 0x01;
-  if( BUTTON2 ) u8Btn += 0x02;
-  if( BUTTON3 ) u8Btn += 0x04;
-  if( BUTTON4 ) u8Btn += 0x08;
-  if( BUTTON5 ) u8Btn += 0x10;
-  if( BUTTON6 ) u8Btn += 0x20;
+
+  FOR_EACH_CH(i)
+  {
+    if( digitalRead(au8BtnPins[i]) )
+      u8Btn |= 0x01<<i;
+  }
 
   u8ChangedButtons = u8BtnOld ^ u8Btn;
   
   if( u8ChangedButtons )
   {
-    for(int i=1; i<=NO_OF_BUTTONS; i++)
+    FOR_EACH_CH(i)
     {
       bState = u8Btn&u8Mask;
 
       if( u8ChangedButtons & u8Mask ) // Has button changed?
       {
         DbgText = "Button ";
-        DbgText += i;
+        DbgText += i+1;
 
         if( bState )
           DbgText += " pressed";
