@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <ETH.h>
 #include <PubSubClient.h>
-#include <ElegantOTA.h> // ip/update
+#include <ElegantOTA.h> // <ip>/update
 #include <EspAdsLib.h>
 #include <Arduino_JSON.h>
 #include <LittleFS.h>
@@ -222,6 +222,7 @@ void setup()
 {
   uint16_t u16TempRaw;
   float fTemp;
+  long hue = 0;
 
   String PlcIp;
   String ScrNetId;
@@ -289,10 +290,9 @@ void setup()
   strip.begin();
   strip.setBrightness(50);             // set the maximum LED intensity down to 50
   LedTest();
-
-  // Turn all LEDs off
+  
+  // Init LED struct with zero
   memset(LEDS, 0, sizeof(LEDS));
-  UpdateLeds();
 
   // Ethernet
   ETH.begin(ETH_ADDR, ETH_RESET, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_TYPE, ETH_CLOCK_GPIO17_OUT);
@@ -304,11 +304,17 @@ void setup()
   Serial.print(ETH.linkSpeed());
   Serial.print(" Mbit");
 
-  while(!((uint32_t)ETH.localIP()))
+  while(!((uint32_t)ETH.localIP()))  // Waiting for IP from DHCP
   {
-    delay(100);
-    PIN_TOGGLE(EXT_LED_PIN);
-  }; // Waiting for IP from DHCP
+    strip.rainbow(hue);
+    strip.fill(0, 1, NO_OF_LEDS-1); // Ranbow only on first LED --> Clear all others
+    strip.show(); // Update strip
+    delay(10);    // Pause for a moment
+    hue += 256;
+  };
+
+  strip.clear(); // clear all pixels
+  strip.show(); // Update strip
 
   IP = ETH.localIP().toString();
   Serial.println("  - IP: " + IP);
@@ -645,6 +651,6 @@ void ReadButtons(void)
 
     delay(10); // suppress bouncing button
   }
-
+  
   u8BtnOld = u8Btn;
 }
