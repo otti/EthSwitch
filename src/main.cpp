@@ -10,6 +10,7 @@
 
 #include "config.html"
 #include "index.html"
+#include "Telnet.h"
 
 // Inputs/Outputs
 #define EXT_LED_PIN   2
@@ -75,6 +76,10 @@ const static char* settingsfile    = "/settings";
 String load_from_file(const char* file_name, String defaultvalue) ;
 File         this_file;
 bool bNewConnection = false;
+
+// Telnet
+// ---------------------------------------------------------
+extern ESPTelnet telnet;
 
 // Neo Pixel
 // ---------------------------------------------------------
@@ -392,6 +397,9 @@ void setup()
     Serial.println("  - MQTT Disabled");
   }
 
+  Serial.println("  - Telnet");
+  setupTelnet();
+
   // Send the current LED state to website once after start up
   UpdateLedsOnWebsite();
 }
@@ -444,13 +452,18 @@ void MqttLedCallback(char* topic, byte* payload, unsigned int length)
 {
   int u32RGB;
   uint8_t u8MaxLedsObjs;
+  String DbgText;
 
   String Buffer(payload, length);
   MqttLeds = JSON.parse(Buffer);
 
-  Serial.println("Led update message received");
-  Serial.print("  - ");
-  Serial.println(JSON.stringify(MqttLeds).c_str());
+  DbgText = "Led update message received\r\n  - ";
+  DbgText += JSON.stringify(MqttLeds);
+  Serial.println(DbgText);
+  telnet.println(DbgText);
+  //Serial.println("Led update message received");
+  //Serial.print("  - ");
+  //Serial.println(JSON.stringify(MqttLeds).c_str());
 
   u8MaxLedsObjs = min(NO_OF_LEDS, MqttLeds.length());
 
@@ -491,6 +504,7 @@ void loop()
   UpdateLeds();
 
   ElegantOTA.loop();
+  telnet.loop();
 
   // to do: replace polling by notifications
   //        Variable will be read from PLC but not used yet
@@ -573,6 +587,7 @@ void ReadButtons(void)
   uint8_t  u8ChangedButtons;
   uint8_t  u8Mask = 0x01;
   bool     bState;
+  String   DbgText;
 
   if( BUTTON1 ) u8Btn += 0x01;
   if( BUTTON2 ) u8Btn += 0x02;
@@ -591,42 +606,45 @@ void ReadButtons(void)
 
       if( u8ChangedButtons & u8Mask ) // Has button changed?
       {
-        Serial.print("Button ");
-        Serial.print(i);
+        DbgText = "Button ";
+        DbgText += i;
 
         if( bState )
-        {
-          Serial.println(" pressed");
-        }
+          DbgText += " pressed";
         else
-        {
-          Serial.println(" released");
-        }
+          DbgText += " released";
+
+        Serial.println(DbgText);
+        telnet.println(DbgText);
       }
       u8Mask = u8Mask << 1;
     }
 
     if( MqttIsEnabled() )
     {
-      Serial.println("  - Send by MQTT");
+      DbgText = "  - Send by MQTT"; 
+      Serial.println(DbgText);
+      telnet.println(DbgText);
       mqtt.publish(MqttTopicBtn, CreatButtonJson(u8Btn).c_str());
     }
 
     if( AdsIsEnabled() )
     {
-      Serial.println("  - Send via ADS");
+      DbgText = "  - Send via ADS"; 
+      Serial.println(DbgText);
+      telnet.println(DbgText);
       VarName = std::string(SettingsJson["PlcButtonVar"]);
       u16Btn = u8Btn;
       Ads.WritePlcVarByName(VarName, &u16Btn, sizeof(uint16_t));
     }
 
-    Serial.println("  - Send to website");
+      DbgText = "  - Send to website"; 
+      Serial.println(DbgText);
+      telnet.println(DbgText);
     events.send(CreatButtonJson(u8Btn).c_str(), "Buttons", millis());
 
     delay(10); // suppress bouncing button
   }
-  
 
   u8BtnOld = u8Btn;
-
 }
