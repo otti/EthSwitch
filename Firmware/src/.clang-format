@@ -1,0 +1,95 @@
+---
+Language: Cpp
+Standard: c++14
+BreakBeforeBraces: Allman
+IndentWidth: 3
+ContinuationIndentWidth: 3
+ColumnLimit: 0
+UseTab: Never
+TabWidth: 3
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+AlignAfterOpenBracket:        Align
+AlignConsecutiveBitFields:    Consecutive     # Consecutive, AcrossEmptyLines, AcrossComments, AcrossEmptyLinesAndComments
+AlignConsecutiveMacros:       Consecutive     # Consecutive, AcrossEmptyLines, AcrossComments, AcrossEmptyLinesAndComments
+AlignConsecutiveAssignments:  Consecutive     # Consecutive, AcrossEmptyLines, AcrossComments, AcrossEmptyLinesAndComments
+AlignConsecutiveDeclarations: Consecutive     # Consecutive, AcrossEmptyLines, AcrossComments, AcrossEmptyLinesAndComments
+AlignEscapedNewlines:         Left
+AlignOperands:                Align
+AlignTrailingComments:        'true'
+# AlignArrayOfStructures:       Left
+
+BraceWrapping:
+  AfterCaseLabel:         'true'
+  AfterClass:             'true'
+  AfterControlStatement:  Always
+  AfterEnum:              'true'
+  AfterFunction:          'true'
+  AfterNamespace:         'true'
+  AfterStruct:            'true'
+  AfterUnion:             'true'
+  AfterExternBlock:       'true'
+  BeforeCatch:            'true'
+  BeforeElse:             'true'
+  BeforeLambdaBody:       'false'
+  BeforeWhile:            'false'
+  SplitEmptyFunction:     'true'
+  SplitEmptyRecord:       'true'
+  SplitEmptyNamespace:    'true'
+
+AllowAllConstructorInitializersOnNextLine:  'true'
+AllowAllParametersOfDeclarationOnNextLine:  'true'
+AllowShortBlocksOnASingleLine:              'true'
+AllowShortEnumsOnASingleLine:               'false'
+AllowShortCaseLabelsOnASingleLine:          'false'
+AllowShortFunctionsOnASingleLine:           None
+AllowShortIfStatementsOnASingleLine:        Never
+AllowShortLambdasOnASingleLine:             None
+AllowShortLoopsOnASingleLine:               'false'
+
+AlwaysBreakAfterReturnType:        None
+AlwaysBreakBeforeMultilineStrings: 'true'
+AlwaysBreakTemplateDeclarations:   'Yes'
+
+# AccessModifierOffset: 0
+# IndentAccessModifiers:  'true'
+# IndentCaseBlocks:       'false'
+IndentCaseLabels:       'false'
+IndentGotoLabels:       'true'
+IndentPPDirectives:     BeforeHash
+NamespaceIndentation: All
+
+BinPackArguments:  'true'
+BinPackParameters: 'true'
+
+BreakBeforeBinaryOperators:   None
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList:         BeforeComma
+
+ConstructorInitializerAllOnOneLineOrOnePerLine: 'true'
+
+BitFieldColonSpacing:           Both
+CompactNamespaces:              'false'
+Cpp11BracedListStyle:           'true'
+FixNamespaceComments:           'true'
+ReflowComments:                 'true'
+# QualifierAlignmentStyle:        Leave
+# EmptyLineAfterAccessModifier:   'Never'
+# EmptyLineBeforeAccessModifier:  'LogicalBlock'
+
+KeepEmptyLinesAtTheStartOfBlocks: 'true'
+MaxEmptyLinesToKeep: 1
+
+SpacesBeforeTrailingComments:   1
+SpaceBeforeAssignmentOperators: 'true'
+SpaceBeforeCpp11BracedList:     'false'
+SpaceBeforeParens:               Never
+SpacesInAngles:                 'false'
+SpacesInParentheses:            'true'
+SpacesInSquareBrackets:         'false'
+
+DerivePointerAlignment:   'false'
+PointerAlignment:         Left
+# ReferenceAlignment:       Left
+...
