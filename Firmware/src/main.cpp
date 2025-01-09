@@ -1,3 +1,7 @@
+// Don't forget to build the file system:
+// Click on the PIO icon at the left side bar
+// Bowse to <project_name>/Platfor/Build Filesystem Image
+
 #include <Arduino.h>
 #include <ETH.h>
 #include <PubSubClient.h>
@@ -7,9 +11,8 @@
 #include <LittleFS.h>
 #include <ESPAsyncWebServer.h>
 #include <Adafruit_NeoPixel.h>
+#include <LittleFS.h>
 
-#include "config.html"
-#include "index.html"
 #include "Telnet.h"
 
 #define NO_OF_CHANNELS 6 // Number of LEDs and Buttons
@@ -57,14 +60,14 @@ ADS::Ads     Ads;
 
 // Website
 // ---------------------------------------------------------
-String             sSettings;
-JSONVar            SettingsJson;
-JSONVar            MqttLeds;
-const static char* settingsfile = "/settings";
-#define DEFAULT_SETTINGS "{\"DevName\": \"EthSwitch\", \"server\": \"\", \"port\": \"1883\", \"user\": \"\", \"pass\": \"\", \"topic\": \"trash\", \"PlcIp\" : \"\", \"PlcAmsAddr\" : \"5.16.3.178.1.1\", \"PlcLedVar\": \"Main.u16LED\", \"PlcButtonVar\": \"Main.u16Button\" }"
-String load_from_file( const char* file_name, String defaultvalue );
-File   this_file;
-bool   bNewConnection = false;
+String  sSettings;
+JSONVar SettingsJson;
+JSONVar MqttLeds;
+
+const static char* settingsfile = "/settings.json";
+
+File this_file;
+bool bNewConnection = false;
 
 // Telnet
 // ---------------------------------------------------------
@@ -89,7 +92,7 @@ void   UpdateLedsOnWebsite( void );
 String MacToStr( const uint8_t* mac );
 float  MCP9700_GetTemperature( uint16_t u16AdcRawValue );
 bool   write_to_file( const char* file_name, String contents );
-String load_from_file( const char* file_name, String defaultvalue );
+String load_from_file( const char* file_name );
 void   MqttLedCallback( char* topic, byte* payload, unsigned int length );
 
 // Structs
@@ -130,7 +133,7 @@ String GetClientId()
 bool MqttIsEnabled( void )
 {
    String s;
-   s = SettingsJson["server"];
+   s = SettingsJson["MqttServer"];
    if( s.length() > 3 )
       return true;
    else
@@ -161,14 +164,14 @@ void UpdateLedsOnWebsite( void )
    Serial.println( JSON.stringify( JsonLeds ).c_str() );
 }
 
-String load_from_file( const char* file_name, String defaultvalue )
+String load_from_file( const char* file_name )
 {
    String result = "";
 
    this_file = LittleFS.open( file_name, "r" );
    if( !this_file )
    { // failed to open the file, return defaultvalue
-      return defaultvalue;
+      return result;
    }
 
    while( this_file.available() )
@@ -263,14 +266,17 @@ void setup()
      */
 
    // Little FS
-   LittleFS.begin( FORMAT_LITTLEFS_IF_FAILED );
+   if( !LittleFS.begin( true ) )
+   {
+      Serial.println( "An Error has occurred while mounting LittleFS\r\nFormating filesystem ...." );
+   }
 
    // force defaults
    // #warning entfernen
    // write_to_file(settingsfile, DEFAULT_SETTINGS);
 
    // Load settings from filesystem
-   sSettings    = load_from_file( settingsfile, DEFAULT_SETTINGS );
+   sSettings    = load_from_file( settingsfile );
    SettingsJson = JSON.parse( sSettings );
 
    Serial.println( "Current settings:" );
@@ -310,22 +316,6 @@ void setup()
    IP = ETH.localIP().toString();
    Serial.println( "  - IP: " + IP );
 
-   // Default website requested
-   server.on( "/", HTTP_GET, []( AsyncWebServerRequest* request )
-              {
-                 request->send_P( 200, "text/html", sIndexPage );
-              } );
-
-   // Config wesite requested
-   server.on( "/config", HTTP_GET, []( AsyncWebServerRequest* request )
-              {
-                 String sJsonTxData = "<!DOCTYPE html>\r\n<html>\r\n<script> var CurrentValues = '" + String( sSettings ) + "'; </script>";
-                 Serial.print( "Current settings: " );
-                 Serial.println( sSettings );
-                 sJsonTxData = sJsonTxData + String( sConfigPage );
-                 request->send_P( 200, "text/html", sJsonTxData.c_str() );
-              } );
-
    // Save button on config website has been pressed --> Save new config to file
    server.on( "/save_new_config_data", HTTP_GET, []( AsyncWebServerRequest* request )
               {
@@ -347,6 +337,8 @@ void setup()
                  delay( 1000 );
                  ESP.restart();
               } );
+
+   server.serveStatic( "/", LittleFS, "/" );
 
    // Add event handler for live update of website
    server.addHandler( &events );
@@ -387,9 +379,9 @@ void setup()
    {
       Serial.println( "  - MQTT Enabled" );
       // Create variables for MQTT toppics (LEDs, Buttons and Status)
-      sprintf( MqttTopicBtn, "%s/%s/Buttons", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"] );
-      sprintf( MqttTopicLed, "%s/%s/LEDS", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"] );
-      sprintf( MqttTopicStatus, "%s/%s/Status", (const char*)SettingsJson["topic"], (const char*)SettingsJson["DevName"] );
+      sprintf( MqttTopicBtn, "%s/%s/Buttons", (const char*)SettingsJson["MqttTopic"], (const char*)SettingsJson["DevName"] );
+      sprintf( MqttTopicLed, "%s/%s/LEDS", (const char*)SettingsJson["MqttTopic"], (const char*)SettingsJson["DevName"] );
+      sprintf( MqttTopicStatus, "%s/%s/Status", (const char*)SettingsJson["MqttTopic"], (const char*)SettingsJson["DevName"] );
    }
    else
    {
@@ -409,7 +401,7 @@ bool MqttReconnect()
 {
    static long PreviousConnectTryMillis = 0;
 
-   if( SettingsJson["server"].length() == 0 )
+   if( SettingsJson["MqttServer"].length() == 0 )
    {
       // No server configured
       return false;
@@ -422,10 +414,10 @@ bool MqttReconnect()
    {
       Serial.println( "Attempting MQTT connection..." );
 
-      mqtt.setServer( SettingsJson["server"], atoi( SettingsJson["port"] ) );
+      mqtt.setServer( SettingsJson["MqttServer"], atoi( SettingsJson["MqttPort"] ) );
 
       // Attempt to connect
-      if( mqtt.connect( GetClientId().c_str(), (const char*)SettingsJson["user"], (const char*)SettingsJson["pass"], MqttTopicStatus, MQTTQOS1, true, MqttStatusOffline ) )
+      if( mqtt.connect( GetClientId().c_str(), (const char*)SettingsJson["MqttUser"], (const char*)SettingsJson["MqttPass"], MqttTopicStatus, MQTTQOS1, true, MqttStatusOffline ) )
       {
          Serial.println( "  - Mqtt connected with ClientId " + GetClientId() );
          mqtt.subscribe( MqttTopicLed );

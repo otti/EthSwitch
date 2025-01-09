@@ -1,4 +1,6 @@
-const char sConfigPage[] PROGMEM = R"=====(
+<!DOCTYPE html>
+<html>
+    
     <body onload="OnLoad()">
   
     <h2>Eth Switch</h2>
@@ -12,19 +14,19 @@ const char sConfigPage[] PROGMEM = R"=====(
       <h3>MQTT Settings</h3>
   
       MQTT Server (Leave blank to disable MQTT)<br>
-      <input id="server" name="server" type="text"><br><br>
+      <input id="MqttServer" name="MqttServer" type="text"><br><br>
   
       MQTT Port<br>
-      <input id="port" name="port" type="text"><br><br>
+      <input id="MqttPort" name="MqttPort" type="text"><br><br>
   
       MQTT User<br>
-      <input id="user" name="user" type="text"><br><br>
+      <input id="MqttUser" name="MqttUser" type="text"><br><br>
   
       MQTT Pass<br>
-      <input id="pass" name="pass" type="password"><br><br>
+      <input id="MqttPass" name="MqttPass" type="password"><br><br>
   
       MQTT Topic<br>
-      <input id="topic" name="topic" type="text" onchange="UpdateTopics()"><br><br>
+      <input id="MqttTopic" name="MqttTopic" type="text" onchange="UpdateTopics()"><br><br>
       <p id="ButtonTopic">foo</p>
       <p id="LedTopic">bar</p>
       <p id="StatusTopic">bar</p>
@@ -47,27 +49,43 @@ const char sConfigPage[] PROGMEM = R"=====(
     </form>
   
   <script>
+	var CurrentValues = '{"DevName":"BtnFlurEg","MqttServer":"mosquitto.lan","MqttPort":"1883","MqttUser":"","MqttPass":"","MqttTopic":"LS111/EG","PlcIp":"","PlcAmsAddr":"5.16.3.178.1.1","PlcLedVar":"Main.u16LED","PlcButtonVar":"Main.u16Button"}';
   
+	
     function OnLoad()
     {
-      const obj = JSON.parse(CurrentValues);
-      
-      inputs = document.getElementsByTagName('input'); // Get no of input fields
-      len = inputs.length - 1; // The submit button is also an input --> - 1
-  
-      var i = 0;
-      for( const x in obj)
-      {
-        inputs[i].value = obj[x];
-        i++;
-      }
-  
-      UpdateTopics();
+		fetch('settings.json')
+	  .then(response => {
+		if (!response.ok) {
+		  throw new Error('Network response was not ok ' + response.statusText);
+		}
+		return response.json(); // Parse the JSON data from the response
+	  })
+	  .then(obj => {
+		  console.log('Fetched JSON data:', obj); // Do something with the data
+		  
+		  inputs = document.getElementsByTagName('input'); // Get no of input fields
+		  len = inputs.length - 1; // The submit button is also an input --> - 1
+	  
+		  var i = 0;
+		  for( const x in obj)
+		  {
+			inputs[i].value = obj[x];
+			i++;
+		  }
+	  
+		  UpdateTopics();
+	  })
+	  .catch(error => {
+		console.error('There was a problem with the fetch operation:', error);
+	  });
+	   
     }
-    
+	
+
     function UpdateTopics()
     {
-      BaseTopic = document.getElementById("topic").value;
+      BaseTopic = document.getElementById("MqttTopic").value;
       DevName   = document.getElementById("DevName").value;
   
       var BtnTopic    = "Button Topic: " + BaseTopic + "/" + DevName + "/Buttons" ;
@@ -83,4 +101,3 @@ const char sConfigPage[] PROGMEM = R"=====(
   
   </body>
   </html>
-)=====";

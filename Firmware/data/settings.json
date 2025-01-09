@@ -1,0 +1,12 @@
+{
+  "DevName": "EthSwitch",
+  "MqttServer": "",
+  "MqttPort": "1883",
+  "MqttUser": "",
+  "MqttPass": "",
+  "MqttTopic": "trash",
+  "PlcIp": "",
+  "PlcAmsAddr": "5.16.3.178.1.1",
+  "PlcLedVar": "Main.u16LED",
+  "PlcButtonVar": "Main.u16Button"
+}

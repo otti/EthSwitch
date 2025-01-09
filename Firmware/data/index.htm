@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Eth Switch</title>
+</head>
+
+<body>
+
+	<object data="EthSwitch.svg" type="image/svg+xml" width="200" id="ButtonSvg"></object>
+
+	<br><br>
+
+	<button onclick="window.location.href='./update';">OTA Update</button>
+	<button onclick="window.location.href='./config.htm';">Config</button><br>
+	<!--
+	<button onclick="ChangeLedColor(3, 255)">Change Color of LED3</button><br>
+	<button onclick="SetButtonState(3, true)">Change Color of BTN3</button><br>
+	<button onclick="SetButtonState(3, false)">Change Color of BTN3</button><br>
+-->
+
+	<script>
+
+		if (!!window.EventSource) {
+			var source = new EventSource('/events');
+
+			source.addEventListener('Buttons', function (e) {
+				UpdateButtons(e.data);
+			}, false);
+
+			source.addEventListener('Leds', function (e) {
+				UpdateLeds(e.data);
+			}, false);
+		}
+
+		function ChangeLedColor(LedNo, Color) {
+			LedId = "LED" + (LedNo + 1);
+			color_hex = "#" + Color.toString(16).padStart(6, '0');
+
+			console.log("Change LED " + LedNo + " color to: " + Color);
+
+			var svgObject = document.getElementById("ButtonSvg");
+			var svgDoc = svgObject.contentDocument;
+			var rectangle = svgDoc.getElementById(LedId);
+			rectangle.setAttribute("style", "fill: " + color_hex + ";");
+		}
+
+		function SetButtonState(BtnNo, pressed) {
+			BtnId = "BTN" + (BtnNo + 1);
+
+			if (pressed)
+				color_hex = "#FF0000"
+			else
+				color_hex = "#000000"
+
+			var svgObject = document.getElementById("ButtonSvg");
+			var svgDoc = svgObject.contentDocument;
+			var rectangle = svgDoc.getElementById(BtnId);
+			rectangle.setAttribute("stroke", color_hex);
+		}
+
+
+		function UpdateButtons(BtnJson) {
+			let obj = JSON.parse(BtnJson);
+			console.log(obj.length);
+
+			for (var i = 0; i < obj.length; i++) {
+				BtnId = "BTN" + (i + 1);
+				var state = obj[i];
+
+				if (parseInt(state.state) != 0)
+					SetButtonState(i, true)
+				else
+					SetButtonState(i, false)
+			}
+		}
+
+		function UpdateLeds(LedJson) {
+			let obj = JSON.parse(LedJson);
+			console.log(LedJson);
+			for (var i = 0; i < obj.length; i++) {
+				LedId = "LED" + (i + 1);
+				//console.log(LedId);
+				var color = obj[i];
+				color = parseInt(color.RGB);
+
+				//color_hex = "#" + color.toString(16).padStart(6, '0');
+				//console.log(color_hex);
+
+				if (color == 0)
+					ChangeLedColor(i, 0xFFFFFF) // Led off
+				else
+					ChangeLedColor(i, color)
+			}
+		}
+
+	</script>
+
+
+</body>
+
+</html>
