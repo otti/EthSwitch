@@ -6,6 +6,6 @@ Firmware/.vscode/.browse.c_cpp.db*
 Firmware/.vscode/launch.json
 Firmware/.vscode/ipch
 
-Hardware*
 Datasheet/**
 
+Hardware_*/*
