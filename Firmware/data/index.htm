@@ -18,7 +18,6 @@
 	<button onclick="SetButtonState(3, true)">Change Color of BTN3</button><br>
 	<button onclick="SetButtonState(3, false)">Change Color of BTN3</button><br>
 -->
-
 	<script>
 
 		if (!!window.EventSource) {
@@ -49,14 +48,14 @@
 			BtnId = "BTN" + (BtnNo + 1);
 
 			if (pressed)
-				color_hex = "#FF0000"
+				color_hex = "#A0A0A0"
 			else
-				color_hex = "#000000"
+				color_hex = "#FFFFFF"
 
 			var svgObject = document.getElementById("ButtonSvg");
 			var svgDoc = svgObject.contentDocument;
 			var rectangle = svgDoc.getElementById(BtnId);
-			rectangle.setAttribute("stroke", color_hex);
+			rectangle.setAttribute("fill", color_hex);
 		}
 
 
