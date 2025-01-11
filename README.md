@@ -25,8 +25,10 @@
 - Transmit button state and read LED from Beckhoff PLC via ADS (experimental)
 
 ## Motivation
+<p>
 <img src="./pics/A5248TSM_Front.jpg" height="200"/>
 <img src="./pics/A5248TSM_Back.jpg"  height="200"/><br>
+</p>
 Original Jung A 5248 TSM<br><br>
 
 This is a very nice piece of hardware. But it comes with three downsides.  
@@ -84,25 +86,30 @@ The main components on the PCB are:
 </table>
 
 ## PCB
+<p>
 <img src="./pics/PCB_V3_Bot.png" alt="Bottom" width="200"/>
 <img src="./pics/PCB_V3_Top.png" alt="Top" width="200"/>
+</p>
 <br>
+<p>
 <img src="./pics/PcbBottom.jpg" width="200"/>
 <img src="./pics/PcbTop.jpg" width="200"/>
+</p>
 <br>
 Made with KiCad
 
 ## Mecanical Parts
+<p>
 <img src="./pics/CaseFront.png" height="200"/>
 <img src="./pics/CaseBack.png" height="200"/>
-
+</p>
 The front is printed with transparent resin. So the case also serves as prism for the LEDs
 
 ## Real images
-
+<p>
 <img src="./pics/Front.jpg" height="200"/> <br><br>
 <img src="./pics/EthSwitch.gif" height="100"/>
-
+</p>
 
 
 
