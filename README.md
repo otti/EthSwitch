@@ -1,4 +1,11 @@
-# EthSwitch
+
+
+<table width="100%">
+<tr>
+<td><H1>EthSwitch</H1></td>
+<td align="right"><img src="./pics/EthSwitch.svg" height="100"/></td>
+</tr>
+</table>
 
 ## Hardware features
 - 6 Buttons
@@ -15,9 +22,9 @@
 - Debugging via Telnet
 - Configuration (Name, MQTT broker, MQTT Topics, ...) via Website
 - Smal website to check the current state of the butons and LEDs
+- Transmit button state and read LED from Beckhoff PLC via ADS (experimental)
 
 ## Motivation
-
 <img src="./pics/A5248TSM_Front.jpg" height="200"/>
 <img src="./pics/A5248TSM_Back.jpg"  height="200"/><br>
 Original Jung A 5248 TSM<br><br>
@@ -29,7 +36,8 @@ Further more the LEDs are implemented in positive logic with a nominal voltage o
 3. This switch is not cheap. This 8 channel version with white buttons has a recommended retail price incl. VAT of 165.35 €! Additionally you need the in-/output hardware on the controller side.
 
 ## Solution
-I created a PCB which has exactly the same outline like the original PCB used in the Jung switch. The position of the switches, the LEDs and the mounting holes are also identical. Also the 3D printed case has the same dimensions. All visible parts are the original buttons and the transparent cover purchased from Jung. So this device is visually indistinguishable from the original.  
+I created a PCB which has exactly the same outline like the original PCB used in the Jung switch. The position of the switches, the LEDs and the mounting holes are also identical. Also the 3D printed case has the same dimensions.  
+After being installed, all visible parts are the original buttons and the transparent cover purchased from Jung. So this device is visually indistinguishable from the original.  
 
 The main components on the PCB are:
 - POE logic
@@ -38,7 +46,7 @@ The main components on the PCB are:
 - ESP32
 - 6 Switches
 - 6 WS2812 RGB LEDs
-- MCP9700 temperature sensor
+- MCP9700 temperature sensor (not implemented yet)
 
 ## Jung part numbers
 
@@ -60,6 +68,12 @@ The main components on the PCB are:
     <td>5,73 €</td>
 </tr>
 <tr>
+    <td>5000004100</td>
+    <td>Supporting metal frame for mounting<br>
+    Tragring</td>
+    <td>?</td>
+</tr>
+<tr>
     <td>A 5236 TSM</td>
     <td><b>Just for reference. Not nedded for this project</b><br>
     Push-button module 24 V AC/DC, 20 mA, 3-channel, 6 contacts, AS/A range<br>
@@ -70,9 +84,12 @@ The main components on the PCB are:
 </table>
 
 ## PCB
-<img src="./pics/PCB_V3_Bot.png" alt="Bottom" height="200"/>
-<img src="./pics/PCB_V3_Top.png" alt="Top" height="200"/>
-
+<img src="./pics/PCB_V3_Bot.png" alt="Bottom" width="200"/>
+<img src="./pics/PCB_V3_Top.png" alt="Top" width="200"/>
+<br>
+<img src="./pics/PcbBottom.jpg" width="200"/>
+<img src="./pics/PcbTop.jpg" width="200"/>
+<br>
 Made with KiCad
 
 ## Mecanical Parts
@@ -82,7 +99,11 @@ Made with KiCad
 The front is printed with transparent resin. So the case also serves as prism for the LEDs
 
 ## Real images
+
+<img src="./pics/Front.jpg" height="200"/> <br><br>
 <img src="./pics/EthSwitch.gif" height="100"/>
+
+
 
 
 ## Current state / possible improvements
