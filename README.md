@@ -98,7 +98,7 @@ The main components on the PCB are:
 <br>
 Made with KiCad
 
-## Mecanical Parts
+## Mechanical Parts
 <p>
 <img src="./pics/CaseFront.png" height="200"/>
 <img src="./pics/CaseBack.png" height="200"/>
