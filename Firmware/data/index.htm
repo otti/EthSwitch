@@ -7,18 +7,46 @@
 
 <body>
 
-	<object data="EthSwitch.svg" type="image/svg+xml" width="200" id="ButtonSvg"></object>
+	<object data="EthSwitch.svg" type="image/svg+xml" width="200" id="ButtonSvg"
+		onload="AttachSvgBtnEventListener()"></object>
 
 	<br><br>
 
 	<button onclick="window.location.href='./update';">OTA Update</button>
 	<button onclick="window.location.href='./config.htm';">Config</button><br>
-	<!--
-	<button onclick="ChangeLedColor(3, 255)">Change Color of LED3</button><br>
-	<button onclick="SetButtonState(3, true)">Change Color of BTN3</button><br>
-	<button onclick="SetButtonState(3, false)">Change Color of BTN3</button><br>
--->
+
 	<script>
+
+		var NO_OF_CHANNELS = 6;
+
+		function onButtonClick(btn) {
+			console.log("Button " + btn + " clicked!");
+			var xhr = new XMLHttpRequest();
+			xhr.open("GET", "/Btn?BtnNo=" + btn + "&Value=pressed", true);
+			xhr.send();
+		}
+
+		function onButtonRelease(btn) {
+			console.log("Button " + btn + " released!");
+			var xhr = new XMLHttpRequest();
+			xhr.open("GET", "/Btn?BtnNo=" + btn + "&Value=released", true);
+			xhr.send();
+		}
+
+		// If a button is clicked on the website
+		function AttachSvgBtnEventListener() {
+			// Access the SVG document within the object
+			const svgDoc = document.getElementById('ButtonSvg').contentDocument;
+
+			for (var i = 0; i < NO_OF_CHANNELS; i++) {
+				let BtnNo = i + 1
+				const Btn = svgDoc.getElementById('BTN' + BtnNo.toString());
+				Btn.addEventListener('mousedown', function () { onButtonClick(BtnNo); });
+				Btn.addEventListener('touchstart', function () { onButtonClick(BtnNo); });
+				Btn.addEventListener('mouseup', function () { onButtonRelease(BtnNo); });
+				Btn.addEventListener('touchend', function () { onButtonRelease(BtnNo); });
+			}
+		}
 
 		if (!!window.EventSource) {
 			var source = new EventSource('/events');
@@ -61,7 +89,6 @@
 
 		function UpdateButtons(BtnJson) {
 			let obj = JSON.parse(BtnJson);
-			console.log(obj.length);
 
 			for (var i = 0; i < obj.length; i++) {
 				BtnId = "BTN" + (i + 1);
@@ -83,15 +110,13 @@
 				var color = obj[i];
 				color = parseInt(color.RGB);
 
-				//color_hex = "#" + color.toString(16).padStart(6, '0');
-				//console.log(color_hex);
-
 				if (color == 0)
 					ChangeLedColor(i, 0xFFFFFF) // Led off
 				else
 					ChangeLedColor(i, color)
 			}
 		}
+
 
 	</script>
 

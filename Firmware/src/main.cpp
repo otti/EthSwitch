@@ -63,6 +63,7 @@ ADS::Ads     Ads;
 String  sSettings;
 JSONVar SettingsJson;
 JSONVar MqttLeds;
+uint8_t u8BtnStateFromWebsite = 0;
 
 const static char* settingsfile = "/settings.json";
 
@@ -348,6 +349,29 @@ void setup()
                         bNewConnection = true;
                      } );
 
+   server.on( "/Btn", HTTP_GET, []( AsyncWebServerRequest* request )
+              {
+                 int BtnNo;
+                 // GET input1 value on <ESP_IP>/slider?value=<inputMessage>
+                 if( request->hasParam( "BtnNo" ) && request->hasParam( "Value" ) )
+                 {
+                    BtnNo = request->getParam( "BtnNo" )->value().toInt();
+                    if( request->getParam( "Value" )->value() == "pressed" )
+                    {
+                       u8BtnStateFromWebsite |= 1 << ( BtnNo - 1 );
+                       Serial.println( "Button " + String( BtnNo ) + " pressed on website" );
+                       telnet.println( "Button " + String( BtnNo ) + " pressed on website" );
+                    }
+                    else
+                    {
+                       u8BtnStateFromWebsite &= ~( 1 << ( BtnNo - 1 ) );
+                       Serial.println( "Button " + String( BtnNo ) + " released on website" );
+                       telnet.println( "Button " + String( BtnNo ) + " released on website" );
+                    }
+                 }
+                 request->send( 200, "text/plain", "OK" );
+              } );
+
    // Over The Air Update (OTA)
    ElegantOTA.begin( &server ); // Start ElegantOTA
    Serial.println( "  - OTA started" );
@@ -587,6 +611,8 @@ void ReadButtons( void )
       if( digitalRead( au8BtnPins[i] ) )
          u8Btn |= 0x01 << i;
    }
+
+   u8Btn = u8Btn | u8BtnStateFromWebsite; // also take care of the buttons of the website
 
    u8ChangedButtons = u8BtnOld ^ u8Btn;
 
